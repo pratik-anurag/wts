@@ -806,10 +806,6 @@ describe("personal local workspace registry", () => {
 
     const controls = [
       {
-        button: screen.getByRole("button", { name: "Switch to dark mode" }),
-        tooltip: "Use dark mode",
-      },
-      {
         button: screen.getByRole("button", { name: "Open How to use WTS" }),
         tooltip: "How to use WTS",
       },
@@ -844,6 +840,39 @@ describe("personal local workspace registry", () => {
     expect(
       screen.getAllByRole("button", { name: "New workspace" }),
     ).toHaveLength(1);
+  });
+
+  it("asks for a repository folder when WTS starts without trusted roots", async () => {
+    const user = userEvent.setup();
+    const emptyCatalog: RepositoryCatalog = {
+      repositoryRootDisplayPath: "",
+      repositoryRootDisplayPaths: [],
+      removableRepositoryRootDisplayPaths: [],
+      repositories: [],
+      skippedEntries: 0,
+    };
+    const fake = fakeWorkspaceClient({
+      list: workspaceListFixture(),
+      repositories: emptyCatalog,
+    });
+    const selectedCatalog = repositoryCatalogFixture();
+    fake.addTrustedRepositoryRootFromPicker.mockResolvedValue(selectedCatalog);
+
+    render(<LocalWorkspace client={fake.client} />);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Choose a repository folder",
+      }),
+    ).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Choose folder" }));
+
+    expect(fake.addTrustedRepositoryRootFromPicker).toHaveBeenCalledOnce();
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("heading", { name: "Choose a repository folder" }),
+      ).not.toBeInTheDocument(),
+    );
   });
 
   it("explains why the creation action is unavailable", async () => {

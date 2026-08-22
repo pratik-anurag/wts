@@ -295,8 +295,8 @@ describe("SetupSheet", () => {
     );
 
     await user.click(screen.getByRole("tab", { name: /General/ }));
-    const darkTheme = screen.getByRole("radio", { name: /Dark/ });
-    await user.click(screen.getByText("Dark").closest("label")!);
+    const darkTheme = screen.getByRole("radio", { name: /Night/ });
+    await user.click(screen.getByText("Night").closest("label")!);
 
     expect(darkTheme).toBeChecked();
     expect(document.documentElement).toHaveAttribute("data-theme", "dark");

@@ -2045,15 +2045,14 @@ fn local_wts_service(app: &tauri::AppHandle) -> Result<LocalWtsService, LocalWts
                 .expect("the desktop platform must provide a home directory")
                 .join("cd")
         });
-    let repository_roots =
+    let repository_roots: Vec<PathBuf> =
         match env::var_os("WTS_REPOSITORY_ROOTS").filter(|value| !value.is_empty()) {
             Some(value) => env::split_paths(&value).collect(),
-            None => vec![
-                env::var_os("WTS_REPOSITORY_ROOT")
-                    .filter(|value| !value.is_empty())
-                    .map(PathBuf::from)
-                    .unwrap_or_else(|| workspace_root.clone()),
-            ],
+            None => env::var_os("WTS_REPOSITORY_ROOT")
+                .filter(|value| !value.is_empty())
+                .map(PathBuf::from)
+                .into_iter()
+                .collect(),
         };
     LocalWtsService::open_with_repository_roots(
         data_dir,

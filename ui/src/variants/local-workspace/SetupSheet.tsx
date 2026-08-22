@@ -11,6 +11,7 @@ import type {
   WorkspaceClient,
 } from "../../lib/wtsClient";
 import {
+  THEME_OPTIONS,
   type ThemePreference,
   useTheme,
 } from "../../theme";
@@ -1147,27 +1148,19 @@ function GeneralPanel({
     packaged: "Packaged",
     path: "Found on PATH",
   } as const;
-  const themeOptions: Array<{
-    id: ThemePreference;
-    label: string;
-    detail: string;
-  }> = [
-    {
-      id: "light",
-      label: "Light",
-      detail: "Bright surfaces for daylight and high ambient light.",
-    },
-    {
-      id: "system",
-      label: "System",
-      detail: `Follow macOS. Currently using ${resolvedTheme} mode.`,
-    },
-    {
-      id: "dark",
-      label: "Dark",
-      detail: "Low-glare surfaces for terminals and focused sessions.",
-    },
-  ];
+  const themeDetails: Record<ThemePreference, string> = {
+    system: `Follow macOS. Currently using ${resolvedTheme} mode.`,
+    light: "Clean neutral surfaces for daylight.",
+    sand: "Warm low-contrast surfaces for long sessions.",
+    dark: "Deep navy surfaces for focused work.",
+    slate: "Neutral charcoal with a violet accent.",
+    forest: "Deep green surfaces with a calm accent.",
+    ocean: "Cool blue surfaces with clear contrast.",
+  };
+  const themeOptions = THEME_OPTIONS.map((option) => ({
+    ...option,
+    detail: themeDetails[option.id],
+  }));
   const cardClickOptions: Array<{
     id: WorkspaceCardClickPreference;
     label: string;

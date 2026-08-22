@@ -18,6 +18,9 @@ describe("theme contract", () => {
     ).toBe("system");
     expect(resolveTheme("system", true)).toBe("dark");
     expect(resolveTheme("system", false)).toBe("light");
+    expect(normalizeThemePreference("forest")).toBe("forest");
+    expect(resolveTheme("forest", false)).toBe("dark");
+    expect(resolveTheme("sand", true)).toBe("light");
   });
 
   it("applies the resolved theme to both document chrome boundaries", () => {
@@ -43,6 +46,15 @@ describe("theme contract", () => {
     expect(
       getComputedStyle(root).getPropertyValue("--wts-control-height").trim(),
     ).toBe("44px");
+
+    applyResolvedTheme("forest");
+    expect(root).toHaveAttribute("data-theme", "forest");
+    expect(root).toHaveAttribute("data-color-scheme", "dark");
+    expect(root.style.colorScheme).toBe("dark");
+    expect(meta).toHaveAttribute("content", "#0d1713");
+    expect(
+      getComputedStyle(root).getPropertyValue("--wts-canvas").trim(),
+    ).toBe("#0d1713");
 
     applyResolvedTheme("light");
     meta.remove();

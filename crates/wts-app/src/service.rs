@@ -378,7 +378,6 @@ pub enum LocalWtsError {
 struct ServiceInner {
     registry: WorkspaceService,
     repository_roots: RwLock<Vec<PathBuf>>,
-    repository_root_display_path: String,
     persisted_repository_roots: Mutex<BTreeSet<PathBuf>>,
     trusted_repository_roots_path: PathBuf,
     git: GitWorktreeService,
@@ -680,14 +679,7 @@ impl LocalWtsService {
                 return Err(LocalWtsError::InvalidRepositoryRoot);
             }
         }
-        if canonical_roots.is_empty() {
-            return Err(LocalWtsError::InvalidRepositoryRoot);
-        }
         let repository_roots = canonical_roots.into_iter().collect::<Vec<_>>();
-        let repository_root_display_path = repository_roots[0]
-            .to_str()
-            .ok_or(LocalWtsError::InvalidRepositoryRoot)?
-            .to_owned();
         let registry = WorkspaceService::open(data_dir, workspace_root_id, &workspace_root)?;
         if canonical_persisted_roots != persisted_repository_roots {
             persist_repository_roots(&trusted_repository_roots_path, &canonical_persisted_roots)?;
@@ -696,7 +688,6 @@ impl LocalWtsService {
             inner: Arc::new(ServiceInner {
                 registry,
                 repository_roots: RwLock::new(repository_roots),
-                repository_root_display_path,
                 persisted_repository_roots: Mutex::new(canonical_persisted_roots),
                 trusted_repository_roots_path,
                 git: GitWorktreeService::new(),
@@ -961,7 +952,7 @@ impl LocalWtsService {
             Ok(repository) => {
                 return Ok(CloneRepositoryResult {
                     repository,
-                    repository_root_display_path: self.inner.repository_root_display_path.clone(),
+                    repository_root_display_path: self.primary_repository_root_display_path()?,
                     reused_existing: true,
                 });
             }
@@ -2252,6 +2243,17 @@ impl LocalWtsService {
         self.repository_catalog()
     }
 
+    fn primary_repository_root_display_path(&self) -> Result<String, LocalWtsError> {
+        self.inner
+            .repository_roots
+            .read()
+            .map_err(|_| LocalWtsError::RepositoryCatalogUnavailable)?
+            .first()
+            .map(|path| display_path(path))
+            .transpose()
+            .map(|path| path.unwrap_or_default())
+    }
+
     pub fn remove_trusted_repository_root(
         &self,
         repository_root: impl AsRef<Path>,
@@ -2427,7 +2429,10 @@ impl LocalWtsService {
                 .then(left.id.cmp(&right.id))
         });
         let catalog = RepositoryCatalog {
-            repository_root_display_path: self.inner.repository_root_display_path.clone(),
+            repository_root_display_path: repository_root_display_paths
+                .first()
+                .cloned()
+                .unwrap_or_default(),
             repository_root_display_paths,
             removable_repository_root_display_paths,
             repositories,
@@ -2496,7 +2501,7 @@ impl LocalWtsService {
             {
                 return Ok(CloneRepositoryResult {
                     repository,
-                    repository_root_display_path: self.inner.repository_root_display_path.clone(),
+                    repository_root_display_path: self.primary_repository_root_display_path()?,
                     reused_existing: true,
                 });
             }
@@ -2530,7 +2535,7 @@ impl LocalWtsService {
                 *cache = None;
                 return Ok(CloneRepositoryResult {
                     repository: repository_summary(&inspection)?,
-                    repository_root_display_path: self.inner.repository_root_display_path.clone(),
+                    repository_root_display_path: self.primary_repository_root_display_path()?,
                     reused_existing: true,
                 });
             }
@@ -2569,7 +2574,7 @@ impl LocalWtsService {
                 *cache = None;
                 Ok(CloneRepositoryResult {
                     repository,
-                    repository_root_display_path: self.inner.repository_root_display_path.clone(),
+                    repository_root_display_path: self.primary_repository_root_display_path()?,
                     reused_existing: false,
                 })
             })();

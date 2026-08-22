@@ -245,6 +245,46 @@
   transform: var(--wts-control-active);
 }
 
+.themeSelect {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.themeSelect > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+.themeSelect select {
+  min-width: 82px;
+  height: 32px;
+  padding: 0 26px 0 9px;
+  color: var(--wts-text);
+  background: var(--wts-surface-subtle);
+  border: 1px solid var(--wts-line-strong);
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.themeSelect select:hover {
+  color: var(--wts-ink);
+  background: var(--wts-surface-hover);
+}
+
+.themeSelect select:focus-visible {
+  outline: none;
+  box-shadow: var(--wts-focus-ring);
+}
+
 .chromeIcon {
   display: grid;
   width: var(--wts-control-height-compact);
@@ -1804,6 +1844,62 @@
   inset: 0;
   background: rgba(9, 22, 43, 0.42);
   animation: overlayIn 140ms ease-out;
+}
+
+.repositoryRootPrompt {
+  position: fixed;
+  z-index: 100;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  width: min(430px, calc(100vw - 40px));
+  padding: 28px;
+  color: var(--wts-ink);
+  background: var(--wts-surface);
+  border: 1px solid var(--wts-line-strong);
+  border-radius: 12px;
+  box-shadow: var(--wts-shadow-md);
+  transform: translate(-50%, -50%);
+  animation: dialogIn 150ms ease-out;
+  flex-direction: column;
+}
+
+.repositoryRootPrompt:focus {
+  outline: none;
+}
+
+.repositoryRootPromptIcon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  margin-bottom: 18px;
+  color: var(--wts-blue);
+  background: var(--wts-blue-soft);
+  border-radius: 9px;
+  place-items: center;
+}
+
+.repositoryRootPrompt h2 {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: -0.025em;
+}
+
+.repositoryRootPrompt > p {
+  margin: 9px 0 0;
+  color: var(--wts-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.repositoryRootPrompt > p[role="alert"] {
+  color: var(--wts-red);
+}
+
+.repositoryRootPromptActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 22px;
 }
 
 .guideDialog {
@@ -11715,6 +11811,13 @@
     height: 30px;
   }
 
+  .themeSelect select {
+    min-width: 72px;
+    width: 72px;
+    height: 30px;
+    padding-left: 7px;
+  }
+
   .workbenchTitleLine strong {
     font-size: 15px;
   }
@@ -11822,6 +11925,34 @@
   :where(
     .guideDialog,
     .createDialog,
+    .repositoryRootPrompt,
+    .menuContent,
+    .removalDialog,
+    .commandPalette
+  ),
+:global(html[data-theme="slate"])
+  :where(
+    .guideDialog,
+    .createDialog,
+    .repositoryRootPrompt,
+    .menuContent,
+    .removalDialog,
+    .commandPalette
+  ),
+:global(html[data-theme="forest"])
+  :where(
+    .guideDialog,
+    .createDialog,
+    .repositoryRootPrompt,
+    .menuContent,
+    .removalDialog,
+    .commandPalette
+  ),
+:global(html[data-theme="ocean"])
+  :where(
+    .guideDialog,
+    .createDialog,
+    .repositoryRootPrompt,
     .menuContent,
     .removalDialog,
     .commandPalette

@@ -144,10 +144,12 @@ in the server result.
 
 ## Repository discovery
 
-Repository roots are local trust boundaries and not a persistent registration
-database. The first canonical root is also the host-owned destination for an
-explicit reviewed repository clone. Imported files and browser requests never
-supply that destination. `WTS_REPOSITORY_ROOTS`, when non-empty, is
+Repository roots are local trust boundaries. Desktop users can persist roots
+selected through the native folder picker. Missing roots are pruned. The first
+canonical root is also the host-owned destination for an explicit reviewed
+repository clone. An empty root list is valid, but cloning and workspace
+creation require the user to select a root first. Imported files and browser
+requests never supply that destination. `WTS_REPOSITORY_ROOTS`, when non-empty, is
 parsed with the platform path-list format and takes precedence over
 `WTS_REPOSITORY_ROOT`. The existing single-root variable remains compatible.
 Every root must be an existing absolute directory.

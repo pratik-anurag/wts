@@ -124,7 +124,9 @@ export WTS_REPOSITORY_ROOTS="/absolute/path/to/repositories:/absolute/path/to/ot
 `WTS_REPOSITORY_ROOTS` takes precedence over `WTS_REPOSITORY_ROOT`. WTS scans
 those roots with bounded nested discovery and later creates managed worktrees
 below `WTS_WORKSPACE_ROOT`. It does not treat either repository-root setting as
-a clone destination.
+a clone destination. Both repository-root variables are optional in the
+desktop app. If neither is configured and no root was previously saved, WTS
+starts with an empty catalog and opens the native folder prompt.
 
 A public build needs reviewed executable-path preferences or a narrowly scoped
 login-environment bootstrap. It must not blindly source arbitrary shell startup

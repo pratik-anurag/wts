@@ -1449,6 +1449,42 @@ fn added_trusted_repository_roots_are_persisted_and_rescanned() {
 }
 
 #[test]
+fn service_starts_without_repository_roots_and_accepts_the_first_trusted_folder() {
+    let directory = tempfile::tempdir().expect("fixture root");
+    let data_dir = directory.path().join("data");
+    let workspace_root = directory.path().join("workspaces");
+    let repository_root = directory.path().join("repositories");
+    fs::create_dir(&repository_root).expect("repository root");
+    create_repository(&repository_root, "checkout-api");
+
+    let service = LocalWtsService::open_with_repository_roots(
+        &data_dir,
+        "empty-root-test",
+        &workspace_root,
+        Vec::new(),
+    )
+    .expect("rootless local service");
+    let empty = service.repository_catalog().expect("empty catalog");
+    assert!(empty.repository_root_display_path.is_empty());
+    assert!(empty.repository_root_display_paths.is_empty());
+    assert!(empty.repositories.is_empty());
+
+    let added = service
+        .add_trusted_repository_root(&repository_root)
+        .expect("first trusted root");
+    assert_eq!(added.repository_root_display_paths.len(), 1);
+    assert_eq!(added.removable_repository_root_display_paths.len(), 1);
+    assert_eq!(added.repositories.len(), 1);
+
+    let removed = service
+        .remove_trusted_repository_root(&repository_root)
+        .expect("remove last trusted root");
+    assert!(removed.repository_root_display_path.is_empty());
+    assert!(removed.repository_root_display_paths.is_empty());
+    assert!(removed.repositories.is_empty());
+}
+
+#[test]
 fn trusted_repository_roots_can_be_removed_and_stay_removed() {
     let directory = tempfile::tempdir().expect("fixture root");
     let primary_root = directory.path().join("primary-repositories");

@@ -22,7 +22,7 @@ afterEach(() => {
 
 describe("unified WTS routes", () => {
   it(
-    "offers a compact dark-mode switch and restores the choice",
+    "offers a compact theme menu and restores the choice",
     async () => {
       const user = userEvent.setup();
       const fake = fakeWorkspaceClient({
@@ -32,21 +32,32 @@ describe("unified WTS routes", () => {
       document.documentElement.dataset.theme = "light";
 
       const firstRender = renderAt("/", fake.client);
-      const switchToDark = await screen.findByRole(
-        "button",
-        { name: "Switch to dark mode" },
+      const themeMenu = await screen.findByRole(
+        "combobox",
+        { name: "Color theme" },
         { timeout: 5_000 },
       );
-      await user.click(switchToDark);
+      expect(
+        within(themeMenu).getAllByRole("option").map((option) => option.textContent),
+      ).toEqual([
+        "System",
+        "Paper",
+        "Sand",
+        "Night",
+        "Slate",
+        "Forest",
+        "Ocean",
+      ]);
+      await user.selectOptions(themeMenu, "forest");
 
-      expect(document.documentElement).toHaveAttribute("data-theme", "dark");
-      expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe("dark");
+      expect(document.documentElement).toHaveAttribute("data-theme", "forest");
+      expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe("forest");
       firstRender.unmount();
 
       renderAt("/", fake.client);
       expect(
-        await screen.findByRole("button", { name: "Switch to light mode" }),
-      ).toBeVisible();
+        await screen.findByRole("combobox", { name: "Color theme" }),
+      ).toHaveValue("forest");
     },
     10_000,
   );

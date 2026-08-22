@@ -9,10 +9,9 @@ primary checkouts stay on their existing branches.
 
 1. Start WTS and open **Environment & integrations** from the gear button.
 2. Confirm that Git is ready.
-3. Open **Repositories** and confirm that the repositories you need were
-   discovered below the configured `WTS_REPOSITORY_ROOT` or
-   `WTS_REPOSITORY_ROOTS`.
-   To include another local folder, select **Add trusted folder**, choose it in
+3. If WTS has no trusted roots, use the startup prompt to choose a repository
+   folder. You can also open **Repositories** and select **Add trusted folder**.
+   Choose the folder in
    the native folder picker, and wait for WTS to rescan. Added roots are stored
    in WTS app data and remain available after restart. Select **Remove** beside
    a user-added root to stop scanning it. WTS also drops stored roots
@@ -526,6 +525,10 @@ Use `WTS_REPOSITORY_ROOTS` when local checkouts span more than one trust root.
 It is parsed as the platform path list (`:` on macOS/Linux and `;` on Windows)
 and takes precedence over `WTS_REPOSITORY_ROOT`. Restart the host after changing
 either variable.
+
+The desktop app does not assume `~/cd` is a repository root. Without an
+environment-configured or previously saved root, it starts with an empty
+catalog and asks you to choose a folder.
 
 ### A base branch is unavailable
 

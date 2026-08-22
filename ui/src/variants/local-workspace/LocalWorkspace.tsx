@@ -88,7 +88,11 @@ import {
   type WorkspaceWorkflowState,
   type WorkspaceView,
 } from "../../lib/wtsClient";
-import { useTheme } from "../../theme";
+import {
+  THEME_OPTIONS,
+  type ThemePreference,
+  useTheme,
+} from "../../theme";
 import { useVisiblePolling } from "../../lib/useVisiblePolling";
 import { SetupSheet } from "./SetupSheet";
 import { VerificationPanel } from "./VerificationPanel";
@@ -9468,7 +9472,7 @@ export function LocalWorkspace({
   initialCreateOpen = false,
   client = defaultWorkspaceClient,
 }: LocalWorkspaceProps = {}) {
-  const { resolvedTheme, toggleTheme } = useTheme();
+  const { preference: themePreference, setPreference: setTheme } = useTheme();
   const { preference: workspaceCardClickPreference } =
     useWorkspaceCardClickPreference();
   const materializationCache = useMemo(
@@ -9561,9 +9565,21 @@ export function LocalWorkspace({
   );
   const [repositoryCatalog, setRepositoryCatalog] =
     useState<RepositoryCatalog | null>(null);
+  const [repositoryRootPromptDismissed, setRepositoryRootPromptDismissed] =
+    useState(false);
+  const [repositoryRootPromptState, setRepositoryRootPromptState] = useState<
+    "idle" | "choosing" | "error"
+  >("idle");
+  const [repositoryRootPromptError, setRepositoryRootPromptError] =
+    useState("");
   const [setupLoading, setSetupLoading] = useState(true);
   const [setupError, setSetupError] = useState("");
   const [setupRevision, setSetupRevision] = useState(0);
+  const hasRepositoryRoots = Boolean(
+    repositoryCatalog &&
+      ((repositoryCatalog.repositoryRootDisplayPaths?.length ?? 0) > 0 ||
+        repositoryCatalog.repositoryRootDisplayPath),
+  );
   const [activeTab, setActiveTab] = useState<WorkbenchTab>(initialWorkbenchTab);
   const [reviewRepositoryId, setReviewRepositoryId] = useState(
     () => new URLSearchParams(globalThis.location?.search ?? "").get("repository") ?? "",
@@ -11059,12 +11075,41 @@ export function LocalWorkspace({
   };
 
   const startNewWorkspace = () => {
+    if (repositoryCatalog && !hasRepositoryRoots) {
+      setRepositoryRootPromptDismissed(false);
+      setRepositoryRootPromptError("");
+      return;
+    }
     invalidateDeepLinkLookup();
     setReviewWorkspaceSeed(null);
     setCreateTemplateWorkspaceId("");
     setCreateRepositoryBaseOverrides({});
     setCreatePlanningEnabled(undefined);
     setCreateOpen(true);
+  };
+
+  const chooseFirstRepositoryRoot = async () => {
+    if (repositoryRootPromptState === "choosing") return;
+    setRepositoryRootPromptState("choosing");
+    setRepositoryRootPromptError("");
+    try {
+      const catalog = await client.addTrustedRepositoryRootFromPicker();
+      if (!catalog) {
+        setRepositoryRootPromptState("idle");
+        return;
+      }
+      setRepositoryCatalog(catalog);
+      setRepositoryRootPromptDismissed(false);
+      setRepositoryRootPromptState("idle");
+      setNotice("Repository folder added · local repositories rescanned");
+    } catch (error) {
+      setRepositoryRootPromptState("error");
+      setRepositoryRootPromptError(
+        error instanceof Error
+          ? error.message
+          : "The repository folder could not be added.",
+      );
+    }
   };
 
   const startRevisedWorkspace = () => {
@@ -13573,31 +13618,22 @@ export function LocalWorkspace({
               skipDelayDuration={0}
               disableHoverableContent
             >
-              <Tooltip.Root>
-                <Tooltip.Trigger asChild>
-                  <Button
-                    className={styles.chromeIcon}
-                    aria-label={`Switch to ${
-                      resolvedTheme === "dark" ? "light" : "dark"
-                    } mode`}
-                    onPress={toggleTheme}
-                  >
-                    <Glyph
-                      name={resolvedTheme === "dark" ? "sun" : "moon"}
-                      size={15}
-                    />
-                  </Button>
-                </Tooltip.Trigger>
-                <Tooltip.Portal>
-                  <Tooltip.Content
-                    className={styles.tooltip}
-                    side="bottom"
-                    sideOffset={6}
-                  >
-                    Use {resolvedTheme === "dark" ? "light" : "dark"} mode
-                  </Tooltip.Content>
-                </Tooltip.Portal>
-              </Tooltip.Root>
+              <label className={styles.themeSelect}>
+                <span>Theme</span>
+                <select
+                  aria-label="Color theme"
+                  onChange={(event) =>
+                    setTheme(event.target.value as ThemePreference)
+                  }
+                  value={themePreference}
+                >
+                  {THEME_OPTIONS.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <Tooltip.Root>
                 <Tooltip.Trigger asChild>
                   <Button
@@ -13715,6 +13751,55 @@ export function LocalWorkspace({
             void removeSelectedWorkspace(deleteProtectedPaths)
           }
         />
+        <Dialog.Root
+          open={Boolean(
+            repositoryCatalog &&
+              !hasRepositoryRoots &&
+              !repositoryRootPromptDismissed &&
+              !setupOpen,
+          )}
+          onOpenChange={(open) => {
+            if (!open) setRepositoryRootPromptDismissed(true);
+          }}
+        >
+          <Dialog.Portal>
+            <Dialog.Overlay className={styles.dialogOverlay} />
+            <Dialog.Content
+              aria-describedby="repository-root-prompt-description"
+              className={styles.repositoryRootPrompt}
+            >
+              <span className={styles.repositoryRootPromptIcon}>
+                <Glyph name="folder" size={20} />
+              </span>
+              <Dialog.Title>Choose a repository folder</Dialog.Title>
+              <Dialog.Description id="repository-root-prompt-description">
+                WTS has no trusted repository roots yet. Choose a local folder
+                to scan for Git repositories. WTS will remember your choice.
+              </Dialog.Description>
+              {repositoryRootPromptError && (
+                <p role="alert">{repositoryRootPromptError}</p>
+              )}
+              <div className={styles.repositoryRootPromptActions}>
+                <Button
+                  className={styles.primaryButton}
+                  isDisabled={repositoryRootPromptState === "choosing"}
+                  onPress={() => void chooseFirstRepositoryRoot()}
+                >
+                  {repositoryRootPromptState === "choosing"
+                    ? "Choosing…"
+                    : "Choose folder"}
+                </Button>
+                <Button
+                  className={styles.secondaryButton}
+                  isDisabled={repositoryRootPromptState === "choosing"}
+                  onPress={() => setRepositoryRootPromptDismissed(true)}
+                >
+                  Not now
+                </Button>
+              </div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
         <SetupSheet
           client={client}
           gitlabWorkspaceId={selectedWorkspace?.id}
