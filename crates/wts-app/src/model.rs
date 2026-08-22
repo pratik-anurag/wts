@@ -213,6 +213,10 @@ pub(crate) struct RepositoryCheckoutAlias {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RepositoryCatalog {
     pub repository_root_display_path: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub repository_root_display_paths: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub removable_repository_root_display_paths: Vec<String>,
     pub repositories: Vec<RepositorySummary>,
     pub skipped_entries: u64,
 }

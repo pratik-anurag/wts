@@ -842,6 +842,8 @@ mod tests {
     fn catalog(repositories: Vec<RepositorySummary>) -> RepositoryCatalog {
         RepositoryCatalog {
             repository_root_display_path: "/repos".to_owned(),
+            repository_root_display_paths: vec!["/repos".to_owned()],
+            removable_repository_root_display_paths: Vec::new(),
             repositories,
             skipped_entries: 0,
         }

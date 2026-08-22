@@ -60,7 +60,7 @@ use std::{
     io::{Read, Write},
     path::{Component, Path, PathBuf},
     sync::{
-        Arc, Mutex,
+        Arc, Mutex, RwLock,
         atomic::{AtomicBool, Ordering},
     },
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -119,6 +119,8 @@ const MAX_WORKSPACE_AGENT_BRIEF_BYTES: usize = 64 * 1024;
 // matters still re-inspects the selected repository identity and exact ref.
 const REPOSITORY_CATALOG_CACHE_TTL: Duration = Duration::from_secs(60);
 const REPOSITORY_DISCOVERY_MAX_ROOTS: usize = 32;
+const TRUSTED_REPOSITORY_ROOTS_FILE: &str = "trusted-repository-roots.json";
+const TRUSTED_REPOSITORY_ROOTS_SCHEMA_VERSION: u32 = 1;
 const REPOSITORY_DISCOVERY_MAX_DEPTH: usize = 4;
 const REPOSITORY_DISCOVERY_DIRECTORY_LIMIT: usize = 4_096;
 const REPOSITORY_DISCOVERY_MAX_ALIASES_PER_REPOSITORY: usize = 32;
@@ -185,6 +187,8 @@ const NODE_BINARY_ENV: &str = "WTS_BROWSER_NODE";
 pub enum LocalWtsError {
     #[error("repository root must be an absolute local directory")]
     InvalidRepositoryRoot,
+    #[error("trusted repository roots could not be persisted")]
+    RepositoryRootPersistenceFailed,
     #[error("repository catalog is unavailable")]
     RepositoryCatalogUnavailable,
     #[error("repository was not found")]
@@ -373,8 +377,10 @@ pub enum LocalWtsError {
 
 struct ServiceInner {
     registry: WorkspaceService,
-    repository_roots: Vec<PathBuf>,
+    repository_roots: RwLock<Vec<PathBuf>>,
     repository_root_display_path: String,
+    persisted_repository_roots: Mutex<BTreeSet<PathBuf>>,
+    trusted_repository_roots_path: PathBuf,
     git: GitWorktreeService,
     launcher: Arc<dyn ExternalLauncher>,
     adapter: ProcessWorkspaceAdapter,
@@ -469,6 +475,13 @@ struct RepositoryScanDirectory {
     configured_root: bool,
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct TrustedRepositoryRootsFile {
+    schema_version: u32,
+    roots: Vec<PathBuf>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct CodeWorkspace {
@@ -480,6 +493,43 @@ struct CodeWorkspace {
 struct CodeWorkspaceFolder {
     name: String,
     path: String,
+}
+
+fn load_persisted_repository_roots(path: &Path) -> BTreeSet<PathBuf> {
+    let Ok(bytes) = fs::read(path) else {
+        return BTreeSet::new();
+    };
+    let Ok(stored) = serde_json::from_slice::<TrustedRepositoryRootsFile>(&bytes) else {
+        return BTreeSet::new();
+    };
+    if stored.schema_version != TRUSTED_REPOSITORY_ROOTS_SCHEMA_VERSION {
+        return BTreeSet::new();
+    }
+    stored.roots.into_iter().collect()
+}
+
+fn persist_repository_roots(path: &Path, roots: &BTreeSet<PathBuf>) -> Result<(), LocalWtsError> {
+    let payload = serde_json::to_vec_pretty(&TrustedRepositoryRootsFile {
+        schema_version: TRUSTED_REPOSITORY_ROOTS_SCHEMA_VERSION,
+        roots: roots.iter().cloned().collect(),
+    })
+    .map_err(|_| LocalWtsError::RepositoryRootPersistenceFailed)?;
+    let temporary = path.with_extension(format!("json.{}.tmp", Uuid::new_v4()));
+    let result = (|| {
+        let mut file = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&temporary)
+            .map_err(|_| LocalWtsError::RepositoryRootPersistenceFailed)?;
+        file.write_all(&payload)
+            .and_then(|_| file.sync_all())
+            .map_err(|_| LocalWtsError::RepositoryRootPersistenceFailed)?;
+        fs::rename(&temporary, path).map_err(|_| LocalWtsError::RepositoryRootPersistenceFailed)
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
 }
 
 impl LocalWtsService {
@@ -563,6 +613,9 @@ impl LocalWtsService {
     ) -> Result<Self, LocalWtsError> {
         let data_dir = data_dir.as_ref();
         let gitlab_review_patch_cache = data_dir.join("gitlab-review-patches.json");
+        let trusted_repository_roots_path = data_dir.join(TRUSTED_REPOSITORY_ROOTS_FILE);
+        let persisted_repository_roots =
+            load_persisted_repository_roots(&trusted_repository_roots_path);
         let agent_sessions =
             AgentSessionStore::open(data_dir).map_err(map_agent_session_failure)?;
         let workspace_root = workspace_root.as_ref();
@@ -586,23 +639,46 @@ impl LocalWtsService {
             )))
         })?;
 
+        let requested_roots = repository_roots
+            .into_iter()
+            .map(|path| (path, false))
+            .chain(
+                persisted_repository_roots
+                    .iter()
+                    .cloned()
+                    .map(|path| (path, true)),
+            );
         let mut canonical_roots = BTreeSet::new();
-        for (index, repository_root) in repository_roots.into_iter().enumerate() {
-            if index >= REPOSITORY_DISCOVERY_MAX_ROOTS
-                || !repository_root.is_absolute()
+        let mut canonical_persisted_roots = BTreeSet::new();
+        for (repository_root, persisted) in requested_roots {
+            if !repository_root.is_absolute()
                 || repository_root
                     .components()
                     .any(|component| matches!(component, Component::ParentDir | Component::CurDir))
             {
+                if persisted {
+                    continue;
+                }
                 return Err(LocalWtsError::InvalidRepositoryRoot);
             }
-            let repository_root = repository_root
-                .canonicalize()
-                .map_err(|_| LocalWtsError::InvalidRepositoryRoot)?;
+            let repository_root = match repository_root.canonicalize() {
+                Ok(path) => path,
+                Err(_) if persisted => continue,
+                Err(_) => return Err(LocalWtsError::InvalidRepositoryRoot),
+            };
             if !repository_root.is_dir() {
+                if persisted {
+                    continue;
+                }
                 return Err(LocalWtsError::InvalidRepositoryRoot);
+            }
+            if persisted && !canonical_roots.contains(&repository_root) {
+                canonical_persisted_roots.insert(repository_root.clone());
             }
             canonical_roots.insert(repository_root);
+            if canonical_roots.len() > REPOSITORY_DISCOVERY_MAX_ROOTS {
+                return Err(LocalWtsError::InvalidRepositoryRoot);
+            }
         }
         if canonical_roots.is_empty() {
             return Err(LocalWtsError::InvalidRepositoryRoot);
@@ -613,11 +689,16 @@ impl LocalWtsService {
             .ok_or(LocalWtsError::InvalidRepositoryRoot)?
             .to_owned();
         let registry = WorkspaceService::open(data_dir, workspace_root_id, &workspace_root)?;
+        if canonical_persisted_roots != persisted_repository_roots {
+            persist_repository_roots(&trusted_repository_roots_path, &canonical_persisted_roots)?;
+        }
         Ok(Self {
             inner: Arc::new(ServiceInner {
                 registry,
-                repository_roots,
+                repository_roots: RwLock::new(repository_roots),
                 repository_root_display_path,
+                persisted_repository_roots: Mutex::new(canonical_persisted_roots),
+                trusted_repository_roots_path,
                 git: GitWorktreeService::new(),
                 launcher: Arc::new(launcher),
                 adapter,
@@ -2119,7 +2200,142 @@ impl LocalWtsService {
             .map_err(Into::into)
     }
 
+    pub fn add_trusted_repository_root(
+        &self,
+        repository_root: impl AsRef<Path>,
+    ) -> Result<RepositoryCatalog, LocalWtsError> {
+        let repository_root = repository_root.as_ref();
+        if !repository_root.is_absolute()
+            || repository_root
+                .components()
+                .any(|component| matches!(component, Component::ParentDir | Component::CurDir))
+        {
+            return Err(LocalWtsError::InvalidRepositoryRoot);
+        }
+        let repository_root = repository_root
+            .canonicalize()
+            .map_err(|_| LocalWtsError::InvalidRepositoryRoot)?;
+        if !repository_root.is_dir() {
+            return Err(LocalWtsError::InvalidRepositoryRoot);
+        }
+
+        let mut roots = self
+            .inner
+            .repository_roots
+            .write()
+            .map_err(|_| LocalWtsError::RepositoryCatalogUnavailable)?;
+        if !roots.contains(&repository_root) {
+            if roots.len() >= REPOSITORY_DISCOVERY_MAX_ROOTS {
+                return Err(LocalWtsError::InvalidRepositoryRoot);
+            }
+            let mut persisted = self
+                .inner
+                .persisted_repository_roots
+                .lock()
+                .map_err(|_| LocalWtsError::RepositoryRootPersistenceFailed)?;
+            let mut next_persisted = persisted.clone();
+            next_persisted.insert(repository_root.clone());
+            persist_repository_roots(&self.inner.trusted_repository_roots_path, &next_persisted)?;
+            *persisted = next_persisted;
+            roots.push(repository_root);
+            roots.sort();
+        }
+        drop(roots);
+
+        let mut cache = self
+            .inner
+            .repository_catalog_cache
+            .lock()
+            .map_err(|_| LocalWtsError::RepositoryCatalogUnavailable)?;
+        *cache = None;
+        drop(cache);
+        self.repository_catalog()
+    }
+
+    pub fn remove_trusted_repository_root(
+        &self,
+        repository_root: impl AsRef<Path>,
+    ) -> Result<RepositoryCatalog, LocalWtsError> {
+        let repository_root = repository_root.as_ref();
+        if !repository_root.is_absolute()
+            || repository_root
+                .components()
+                .any(|component| matches!(component, Component::ParentDir | Component::CurDir))
+        {
+            return Err(LocalWtsError::InvalidRepositoryRoot);
+        }
+        let repository_root = repository_root
+            .canonicalize()
+            .unwrap_or_else(|_| repository_root.to_owned());
+
+        let mut roots = self
+            .inner
+            .repository_roots
+            .write()
+            .map_err(|_| LocalWtsError::RepositoryCatalogUnavailable)?;
+        let mut persisted = self
+            .inner
+            .persisted_repository_roots
+            .lock()
+            .map_err(|_| LocalWtsError::RepositoryRootPersistenceFailed)?;
+        if !persisted.contains(&repository_root) {
+            return Err(LocalWtsError::InvalidRepositoryRoot);
+        }
+        let mut next_persisted = persisted.clone();
+        next_persisted.remove(&repository_root);
+        persist_repository_roots(&self.inner.trusted_repository_roots_path, &next_persisted)?;
+        *persisted = next_persisted;
+        roots.retain(|root| root != &repository_root);
+        drop(persisted);
+        drop(roots);
+
+        self.clear_repository_catalog_cache()?;
+        self.repository_catalog()
+    }
+
+    fn prune_missing_trusted_repository_roots(&self) -> Result<(), LocalWtsError> {
+        let mut roots = self
+            .inner
+            .repository_roots
+            .write()
+            .map_err(|_| LocalWtsError::RepositoryCatalogUnavailable)?;
+        let mut persisted = self
+            .inner
+            .persisted_repository_roots
+            .lock()
+            .map_err(|_| LocalWtsError::RepositoryRootPersistenceFailed)?;
+        let next_persisted = persisted
+            .iter()
+            .filter(|root| root.is_dir())
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        if next_persisted == *persisted {
+            return Ok(());
+        }
+        let removed = persisted
+            .difference(&next_persisted)
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        persist_repository_roots(&self.inner.trusted_repository_roots_path, &next_persisted)?;
+        *persisted = next_persisted;
+        roots.retain(|root| !removed.contains(root));
+        drop(persisted);
+        drop(roots);
+        self.clear_repository_catalog_cache()
+    }
+
+    fn clear_repository_catalog_cache(&self) -> Result<(), LocalWtsError> {
+        let mut cache = self
+            .inner
+            .repository_catalog_cache
+            .lock()
+            .map_err(|_| LocalWtsError::RepositoryCatalogUnavailable)?;
+        *cache = None;
+        Ok(())
+    }
+
     pub fn repository_catalog(&self) -> Result<RepositoryCatalog, LocalWtsError> {
+        self.prune_missing_trusted_repository_roots()?;
         let mut cache = self
             .inner
             .repository_catalog_cache
@@ -2142,10 +2358,34 @@ impl LocalWtsService {
         }
 
         let scan_started = Instant::now();
-        #[cfg(debug_assertions)]
-        let development_roots = self
+        let repository_roots = self
             .inner
             .repository_roots
+            .read()
+            .map_err(|_| LocalWtsError::RepositoryCatalogUnavailable)?
+            .clone();
+        let repository_root_display_paths = repository_roots
+            .iter()
+            .map(|path| {
+                path.to_str()
+                    .ok_or(LocalWtsError::InvalidRepositoryRoot)
+                    .map(ToOwned::to_owned)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let removable_repository_root_display_paths = self
+            .inner
+            .persisted_repository_roots
+            .lock()
+            .map_err(|_| LocalWtsError::RepositoryRootPersistenceFailed)?
+            .iter()
+            .map(|path| {
+                path.to_str()
+                    .ok_or(LocalWtsError::InvalidRepositoryRoot)
+                    .map(ToOwned::to_owned)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        #[cfg(debug_assertions)]
+        let development_roots = repository_roots
             .iter()
             .map(|path| bounded_development_path(path))
             .collect::<Vec<_>>();
@@ -2153,7 +2393,7 @@ impl LocalWtsService {
         tracing::info!(
             target: "wts_app::repository_catalog",
             cache_hit = false,
-            configured_root_count = self.inner.repository_roots.len(),
+            configured_root_count = repository_roots.len(),
             configured_roots = ?development_roots,
             max_depth = REPOSITORY_DISCOVERY_MAX_DEPTH,
             directory_limit = REPOSITORY_DISCOVERY_DIRECTORY_LIMIT,
@@ -2161,7 +2401,7 @@ impl LocalWtsService {
         );
 
         let (mut repositories, stats) = match discover_repositories(
-            &self.inner.repository_roots,
+            &repository_roots,
             self.inner.git,
             RepositoryDiscoveryLimits::default(),
         ) {
@@ -2170,7 +2410,7 @@ impl LocalWtsService {
                 #[cfg(debug_assertions)]
                 tracing::info!(
                     target: "wts_app::repository_catalog",
-                    configured_root_count = self.inner.repository_roots.len(),
+                    configured_root_count = repository_roots.len(),
                     configured_roots = ?development_roots,
                     elapsed_ms = u64::try_from(scan_started.elapsed().as_millis())
                         .unwrap_or(u64::MAX),
@@ -2188,6 +2428,8 @@ impl LocalWtsService {
         });
         let catalog = RepositoryCatalog {
             repository_root_display_path: self.inner.repository_root_display_path.clone(),
+            repository_root_display_paths,
+            removable_repository_root_display_paths,
             repositories,
             skipped_entries: stats.skipped_entries(),
         };
@@ -2196,7 +2438,7 @@ impl LocalWtsService {
         tracing::info!(
             target: "wts_app::repository_catalog",
             cache_hit = false,
-            configured_root_count = self.inner.repository_roots.len(),
+            configured_root_count = repository_roots.len(),
             configured_roots = ?development_roots,
             visited_directories = stats.visited_directories,
             repository_boundaries = stats.repository_boundaries,
@@ -2262,7 +2504,10 @@ impl LocalWtsService {
             let repository_root = self
                 .inner
                 .repository_roots
+                .read()
+                .map_err(|_| LocalWtsError::RepositoryCatalogUnavailable)?
                 .first()
+                .cloned()
                 .ok_or(LocalWtsError::InvalidRepositoryRoot)?;
             let target = repository_root.join(&remote.repository_leaf);
             if target
@@ -7789,6 +8034,7 @@ fn operational_failure_category(error: &LocalWtsError) -> &'static str {
         LocalWtsError::InvalidMaterializationManifest => "invalid_materialization_manifest",
         LocalWtsError::WorkspaceGitStateChanged => "workspace_git_state_changed",
         LocalWtsError::InvalidRepositoryRoot => "invalid_local_path",
+        LocalWtsError::RepositoryRootPersistenceFailed => "repository_root_persistence_failed",
         LocalWtsError::RepositoryCatalogUnavailable => "repository_catalog_unavailable",
         LocalWtsError::RepositoryNotFound => "repository_not_found",
         LocalWtsError::InvalidRepositoryRemote => "invalid_repository_remote",

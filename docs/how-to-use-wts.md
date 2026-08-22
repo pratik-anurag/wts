@@ -12,6 +12,11 @@ primary checkouts stay on their existing branches.
 3. Open **Repositories** and confirm that the repositories you need were
    discovered below the configured `WTS_REPOSITORY_ROOT` or
    `WTS_REPOSITORY_ROOTS`.
+   To include another local folder, select **Add trusted folder**, choose it in
+   the native folder picker, and wait for WTS to rescan. Added roots are stored
+   in WTS app data and remain available after restart. Select **Remove** beside
+   a user-added root to stop scanning it. WTS also drops stored roots
+   automatically when their folders no longer exist.
 4. Confirm VS Code if you want WTS to open the generated workspace.
 5. If you are running the retained developer self-test, check **General** for
    Node, browser helper, Playwright, and Chromium readiness.
@@ -198,20 +203,23 @@ are signed in, or that you can access it.
 Use this flow while Jira or OpenProject is unavailable:
 
 1. Select **New workspace**.
-2. Choose **Repository set**.
-3. Enter the repository labels separated by commas.
-4. Select **Review repositories**.
-5. Review or change each requested base branch. The discovered default branch
+2. Choose **Repositories**.
+3. Optionally enter a workspace name. WTS uses it for the saved plan and
+   generated workspace. Otherwise it derives a name from the selected repos.
+4. Add one or more discovered repositories from **Existing local**, or use
+   **Clone Git URL**.
+5. Select **Review repositories**.
+6. Review or change each requested base branch. The discovered default branch
    is used when no override is needed. If the row is pinned to a catalog
    repository with a trusted GitHub or GitLab origin, the adjacent action can
    open the exact locally resolved commit for inspection.
-6. Select a preferred provider. This saves a preference. It does not start an
+7. Select a preferred provider. This saves a preference. It does not start an
    agent.
-7. Review the exact-commit service proposals, choose the services and port
+8. Review the exact-commit service proposals, choose the services and port
    intent to retain, then continue. It is valid to save a plan with no runtime
    services.
-8. Review the manifest and select **Save workspace plan**.
-9. Open the saved plan.
+9. Review the manifest and select **Save workspace plan**.
+10. Open the saved plan.
 
 Saving a plan writes registry state only. It does not create branches,
 worktrees, graphs, or agent processes.
@@ -556,11 +564,11 @@ Confirm that each repository is visible in
 Import matches folder entries only against that bounded local catalog. It does
 not follow arbitrary embedded paths or clone a missing repository. Ambiguous
 and unmatched entries stay visible. If the repository is already in the
-catalog, add it directly with **Add repository folders**. Otherwise adjust
-`WTS_REPOSITORY_ROOTS`/`WTS_REPOSITORY_ROOT`, restart WTS, refresh after the
-short catalog cache expires, and re-import. You can also continue with
-**Repository set**. An explicit cache-invalidating rescan and persistent
-repository registration are still planned.
+catalog, add it directly with **Add repository folders**. Otherwise use
+**Environment & integrations → Repositories → Add trusted folder** to choose
+and persist another discovery root, then re-import. Environment variables
+remain available for managed deployments. You can also continue with
+**Repositories** and select local checkouts manually.
 
 ### Jira import is unavailable
 

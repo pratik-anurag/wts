@@ -2,6 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { THEME_STORAGE_KEY, ThemeProvider } from "../../theme";
+import type { WorkspaceClient } from "../../lib/wtsClient";
 import { WORKSPACE_CARD_CLICK_STORAGE_KEY } from "./workspaceCardPreference";
 import {
   SetupSheet,
@@ -182,10 +183,28 @@ afterEach(() => {
 describe("SetupSheet", () => {
   it("offers official install pages for missing tools and explains terminal choices", async () => {
     const user = userEvent.setup();
+    let resolveCodexDownload!: () => void;
+    const codexDownload = new Promise<void>((resolve) => {
+      resolveCodexDownload = resolve;
+    });
+    const onOpenDownloadPage = vi.fn(
+      (integrationId: string) =>
+        integrationId === "codex" ? codexDownload : Promise.resolve(),
+    );
     const terminalSnapshot: SetupSnapshot = {
       ...snapshot,
       integrations: [
-        ...snapshot.integrations,
+        ...snapshot.integrations.map((integration) =>
+          integration.id === "codex"
+            ? {
+                ...integration,
+                status: "notFound" as const,
+                installation: "missing" as const,
+                setup: "needsDependency" as const,
+                blockingFor: ["codexLaunch" as const],
+              }
+            : integration,
+        ),
         {
           id: "warp",
           category: "terminal",
@@ -219,6 +238,7 @@ describe("SetupSheet", () => {
         loading={false}
         onOpenChange={vi.fn()}
         onRefresh={vi.fn()}
+        onOpenDownloadPage={onOpenDownloadPage}
         open
         repositories={repositories}
         snapshot={terminalSnapshot}
@@ -229,17 +249,30 @@ describe("SetupSheet", () => {
     expect(
       screen.getByText(/Default Terminal uses the macOS Terminal app/),
     ).toBeVisible();
-    expect(screen.getByRole("link", { name: "Get Warp" })).toHaveAttribute(
-      "href",
-      "https://www.warp.dev/download",
+    await user.click(screen.getByRole("button", { name: "Get Codex" }));
+    expect(
+      screen.getByRole("progressbar", {
+        name: "Opening Codex download page",
+      }),
+    ).toBeVisible();
+    expect(onOpenDownloadPage).toHaveBeenCalledWith(
+      "codex",
+      "https://developers.openai.com/codex/cli",
     );
-    expect(screen.getByRole("link", { name: "Get iTerm2" })).toHaveAttribute(
-      "href",
-      "https://iterm2.com/downloads.html",
-    );
-    expect(screen.getByRole("link", { name: "Get OpenCode" })).toHaveAttribute(
-      "href",
+    resolveCodexDownload();
+    expect(
+      await screen.findByText("Codex download page opened in your browser."),
+    ).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Get OpenCode" }));
+    await user.click(screen.getByRole("button", { name: "Get Warp" }));
+    expect(onOpenDownloadPage).toHaveBeenCalledWith(
+      "openCode",
       "https://opencode.ai/docs",
+    );
+    expect(onOpenDownloadPage).toHaveBeenCalledWith(
+      "warp",
+      "https://www.warp.dev/download",
     );
   });
 
@@ -502,6 +535,80 @@ describe("SetupSheet", () => {
     expect(generalTab).toHaveFocus();
     expect(generalTab).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("heading", { name: "General" })).toBeVisible();
+  });
+
+  it("adds a trusted root through the native picker and publishes the rescanned catalog", async () => {
+    const user = userEvent.setup();
+    const rescanned: RepositoryCatalog = {
+      ...repositories,
+      repositoryRootDisplayPaths: ["~/cd", "~/projects"],
+    };
+    const addTrustedRepositoryRootFromPicker = vi.fn().mockResolvedValue(rescanned);
+    const onRepositoriesChange = vi.fn();
+
+    render(
+      <SetupSheet
+        client={{ addTrustedRepositoryRootFromPicker } as unknown as WorkspaceClient}
+        loading={false}
+        onOpenChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onRepositoriesChange={onRepositoriesChange}
+        open
+        repositories={repositories}
+        snapshot={snapshot}
+      />,
+    );
+
+    await user.click(screen.getByRole("tab", { name: /^Repositories/ }));
+    await user.click(screen.getByRole("button", { name: "Add trusted folder" }));
+
+    expect(addTrustedRepositoryRootFromPicker).toHaveBeenCalledOnce();
+    expect(onRepositoriesChange).toHaveBeenCalledWith(rescanned);
+    expect(
+      await screen.findByText("Trusted folder added and repositories rescanned."),
+    ).toBeVisible();
+  });
+
+  it("removes a user-added trusted root and publishes the rescanned catalog", async () => {
+    const user = userEvent.setup();
+    const withAddedRoot: RepositoryCatalog = {
+      ...repositories,
+      repositoryRootDisplayPaths: ["~/cd", "/Users/me/projects"],
+      removableRepositoryRootDisplayPaths: ["/Users/me/projects"],
+    };
+    const rescanned: RepositoryCatalog = {
+      ...repositories,
+      repositoryRootDisplayPaths: ["~/cd"],
+      removableRepositoryRootDisplayPaths: [],
+    };
+    const removeTrustedRepositoryRoot = vi.fn().mockResolvedValue(rescanned);
+    const onRepositoriesChange = vi.fn();
+
+    render(
+      <SetupSheet
+        client={{ removeTrustedRepositoryRoot } as unknown as WorkspaceClient}
+        loading={false}
+        onOpenChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onRepositoriesChange={onRepositoriesChange}
+        open
+        repositories={withAddedRoot}
+        snapshot={snapshot}
+      />,
+    );
+
+    await user.click(screen.getByRole("tab", { name: /^Repositories/ }));
+    await user.click(
+      screen.getByRole("button", { name: "Remove /Users/me/projects" }),
+    );
+
+    expect(removeTrustedRepositoryRoot).toHaveBeenCalledWith(
+      "/Users/me/projects",
+    );
+    expect(onRepositoriesChange).toHaveBeenCalledWith(rescanned);
+    expect(
+      await screen.findByText("Trusted folder removed and repositories rescanned."),
+    ).toBeVisible();
   });
 
   it("shows which browser-journey prerequisite needs setup", async () => {

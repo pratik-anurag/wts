@@ -1443,6 +1443,7 @@ fn map_local_registry_error(error: LocalWtsError) -> RegistryFailure {
 fn map_local_mvp_error(error: LocalWtsError) -> MvpFailure {
     match error {
         LocalWtsError::InvalidRepositoryRoot => MvpFailure::InvalidLocalConfiguration,
+        LocalWtsError::RepositoryRootPersistenceFailed => MvpFailure::Unavailable,
         LocalWtsError::RepositoryCatalogUnavailable => MvpFailure::RepositoryCatalogUnavailable,
         LocalWtsError::InvalidRepositoryRemote => MvpFailure::InvalidRepositoryRemote,
         LocalWtsError::RepositoryCloneConflict => MvpFailure::RepositoryCloneConflict,

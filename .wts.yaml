@@ -1,0 +1,7 @@
+version: 1
+defaults:
+  stop_timeout_sec: 8
+  shell: /bin/sh
+processes:
+  - name: genman
+    command: go run ./cmd/genman

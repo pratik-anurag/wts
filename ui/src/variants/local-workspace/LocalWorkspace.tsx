@@ -2602,7 +2602,8 @@ function NewWorkspaceDialog({
         ? (codeWorkspaceImport?.suggestedRepositorySetLabel ?? "")
         : initialReviewWorkspace
           ? `Review ${initialReviewWorkspace.preparation.repository.label} !${initialReviewWorkspace.review.number}`
-          : `Local repositories · ${enteredRepositoryNames[0] ?? "workspace"}`;
+          : sourceValue.trim() ||
+            `Local repositories · ${enteredRepositoryNames[0] ?? "workspace"}`;
   const draftTitle = isIssueSource
     ? issueProvider === "jira"
       ? (jiraImport?.summary ?? `Work on ${draftKey || "Jira issue"}`)
@@ -2616,7 +2617,8 @@ function NewWorkspaceDialog({
         ? codeWorkspaceTitle.trim()
       : initialReviewWorkspace
         ? `Review ${initialReviewWorkspace.review.repository} !${initialReviewWorkspace.review.number}`
-        : `Repositories: ${
+        : sourceValue.trim() ||
+          `Repositories: ${
             enteredRepositoryNames.slice(0, 2).join(" + ") || "local work"
           }`;
   const importedIssue =
@@ -4796,6 +4798,24 @@ function NewWorkspaceDialog({
                     data-ui="workspace-create.repositories"
                     data-ui-label="Repository selection"
                   >
+                    <div className={styles.field}>
+                      <Label>Workspace name</Label>
+                      <div className={styles.inputWithIcon}>
+                        <Glyph name="folder" size={17} />
+                        <Input
+                          aria-label="Workspace name"
+                          autoFocus
+                          maxLength={120}
+                          onChange={(event) => setSourceValue(event.target.value)}
+                          placeholder="e.g. Payments platform"
+                          value={sourceValue}
+                        />
+                      </div>
+                      <small>
+                        This name identifies the plan, generated workspace, and
+                        its repository worktrees in WTS.
+                      </small>
+                    </div>
                     <header>
                       <span><Glyph name="folder" size={15} /></span>
                       <div>
@@ -13705,6 +13725,7 @@ export function LocalWorkspace({
           loading={setupLoading}
           error={setupError || undefined}
           onRefresh={() => setSetupRevision((revision) => revision + 1)}
+          onRepositoriesChange={setRepositoryCatalog}
           onVerifyJira={() => client.verifyJiraMcp()}
           onVerifyOpenProject={() => client.verifyOpenProject()}
           appUpdate={appUpdate}

@@ -1,5 +1,10 @@
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeSet, env, path::PathBuf, process::Command};
+use std::{
+    collections::BTreeSet,
+    env,
+    path::PathBuf,
+    process::{Command, Stdio},
+};
 use tauri::Manager;
 #[cfg(debug_assertions)]
 use tracing::info;
@@ -42,8 +47,8 @@ use wts_core::{
 use wts_integrations::{
     ActivityWatchDailyReview, ActivityWatchError, ActivityWatchReviewError, ActivityWatchStatus,
     GithubReviewInbox, GitlabIntegrationStatus, GitlabMergeRequestInbox, GitlabReviewInbox,
-    JiraActiveIssueList, JiraMcpVerification, OpenProjectError, OpenProjectVerification,
-    SetupSnapshot, TimeReviewAgentBrief,
+    IntegrationId, JiraActiveIssueList, JiraMcpVerification, OpenProjectError,
+    OpenProjectVerification, SetupSnapshot, TimeReviewAgentBrief,
 };
 use wts_store::{
     CreateWorkspaceResult, WorkspaceList, WorkspaceStoreError, WorkspaceView,
@@ -107,6 +112,63 @@ struct AppInfo {
     target_os: &'static str,
     target_arch: &'static str,
     tauri_version: &'static str,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct IntegrationDownloadResult {
+    integration_id: IntegrationId,
+    accepted: bool,
+    destination: &'static str,
+}
+
+fn integration_download_url(integration_id: IntegrationId) -> Option<&'static str> {
+    match integration_id {
+        IntegrationId::Git => Some("https://git-scm.com/downloads"),
+        IntegrationId::Vscode => Some("https://code.visualstudio.com/download"),
+        IntegrationId::Warp => Some("https://www.warp.dev/download"),
+        IntegrationId::Iterm2 => Some("https://iterm2.com/downloads.html"),
+        IntegrationId::Codex => Some("https://developers.openai.com/codex/cli"),
+        IntegrationId::OpenCode => Some("https://opencode.ai/docs"),
+        IntegrationId::Hermes
+        | IntegrationId::Graphify
+        | IntegrationId::JiraMcp
+        | IntegrationId::OpenProject => None,
+    }
+}
+
+#[tauri::command]
+fn open_integration_download(
+    integration_id: IntegrationId,
+) -> Result<IntegrationDownloadResult, WorkspaceCommandError> {
+    let destination = integration_download_url(integration_id).ok_or(WorkspaceCommandError {
+        code: "integration_download_unavailable",
+        message: "This integration does not have a supported download page.".to_owned(),
+        retryable: false,
+    })?;
+    let status = Command::new("/usr/bin/open")
+        .arg(destination)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map_err(|_| WorkspaceCommandError {
+            code: "integration_download_unavailable",
+            message: "WTS could not open the official download page.".to_owned(),
+            retryable: true,
+        })?;
+    if !status.success() {
+        return Err(WorkspaceCommandError {
+            code: "integration_download_rejected",
+            message: "The system browser did not accept the download page.".to_owned(),
+            retryable: true,
+        });
+    }
+    Ok(IntegrationDownloadResult {
+        integration_id,
+        accepted: true,
+        destination,
+    })
 }
 
 #[derive(Debug, Serialize)]
@@ -699,6 +761,42 @@ async fn list_repositories(
     run_blocking_command(move || {
         service
             .repository_catalog()
+            .map_err(local_wts_command_error)
+    })
+    .await
+}
+
+#[tauri::command]
+async fn add_trusted_repository_root_from_picker(
+    state: tauri::State<'_, LocalWtsService>,
+) -> Result<Option<RepositoryCatalog>, WorkspaceCommandError> {
+    let Some(folder) = rfd::AsyncFileDialog::new()
+        .set_title("Choose a trusted repository folder")
+        .pick_folder()
+        .await
+    else {
+        return Ok(None);
+    };
+    let path = folder.path().to_owned();
+    let service = state.inner().clone();
+    run_blocking_command(move || {
+        service
+            .add_trusted_repository_root(path)
+            .map(Some)
+            .map_err(local_wts_command_error)
+    })
+    .await
+}
+
+#[tauri::command]
+async fn remove_trusted_repository_root(
+    repository_root: String,
+    state: tauri::State<'_, LocalWtsService>,
+) -> Result<RepositoryCatalog, WorkspaceCommandError> {
+    let service = state.inner().clone();
+    run_blocking_command(move || {
+        service
+            .remove_trusted_repository_root(repository_root)
             .map_err(local_wts_command_error)
     })
     .await
@@ -1988,6 +2086,11 @@ fn local_wts_command_error(error: LocalWtsError) -> WorkspaceCommandError {
             message: "The configured WTS repository root is invalid.".to_owned(),
             retryable: false,
         },
+        LocalWtsError::RepositoryRootPersistenceFailed => WorkspaceCommandError {
+            code: "repository_root_persistence_failed",
+            message: "WTS could not save the selected trusted repository folder.".to_owned(),
+            retryable: true,
+        },
         LocalWtsError::RepositoryCatalogUnavailable => WorkspaceCommandError {
             code: "repository_catalog_unavailable",
             message: "The local repository catalog is temporarily unavailable.".to_owned(),
@@ -2729,6 +2832,7 @@ pub fn run() {
             resolve_workspace_review_thread,
             create_workspace,
             get_setup_snapshot,
+            open_integration_download,
             get_github_review_inbox,
             open_github_review,
             get_gitlab_review_inbox,
@@ -2742,6 +2846,8 @@ pub fn run() {
             get_activity_watch_daily_review,
             get_activity_watch_time_review_brief,
             list_repositories,
+            add_trusted_repository_root_from_picker,
+            remove_trusted_repository_root,
             clone_repository,
             refresh_repository_branches,
             analyze_workspace_runtime,
@@ -3095,6 +3201,31 @@ mod tests {
         assert_eq!(updater["dangerousInsecureTransportProtocol"], true);
     }
 
+    #[test]
+    fn integration_download_handoff_uses_only_fixed_official_pages() {
+        assert_eq!(
+            integration_download_url(IntegrationId::Codex),
+            Some("https://developers.openai.com/codex/cli")
+        );
+        assert_eq!(
+            integration_download_url(IntegrationId::OpenCode),
+            Some("https://opencode.ai/docs")
+        );
+        assert_eq!(
+            integration_download_url(IntegrationId::Warp),
+            Some("https://www.warp.dev/download")
+        );
+        assert_eq!(integration_download_url(IntegrationId::JiraMcp), None);
+
+        let capability = include_str!("../capabilities/default.json");
+        let build = include_str!("../build.rs");
+        let permission =
+            include_str!("../permissions/autogenerated/open_integration_download.toml");
+        assert!(build.contains("\"open_integration_download\""));
+        assert!(capability.contains("\"allow-open-integration-download\""));
+        assert!(permission.contains("commands.allow = [\"open_integration_download\"]"));
+    }
+
     #[cfg(debug_assertions)]
     #[test]
     fn desktop_development_logging_is_control_safe_and_visible_by_default() {
@@ -3135,6 +3266,11 @@ mod tests {
             include_str!("../permissions/autogenerated/send_desktop_notification.toml");
         let permission = include_str!("../permissions/autogenerated/open_repository_base.toml");
         let clone_permission = include_str!("../permissions/autogenerated/clone_repository.toml");
+        let trusted_root_permission = include_str!(
+            "../permissions/autogenerated/add_trusted_repository_root_from_picker.toml"
+        );
+        let remove_trusted_root_permission =
+            include_str!("../permissions/autogenerated/remove_trusted_repository_root.toml");
         let runtime_permission =
             include_str!("../permissions/autogenerated/analyze_workspace_runtime.toml");
         let activity_watch_permission =
@@ -3185,6 +3321,8 @@ mod tests {
         assert!(capability.contains("\"allow-remove-workspace\""));
         assert!(capability.contains("\"allow-open-repository-base\""));
         assert!(capability.contains("\"allow-clone-repository\""));
+        assert!(capability.contains("\"allow-add-trusted-repository-root-from-picker\""));
+        assert!(capability.contains("\"allow-remove-trusted-repository-root\""));
         assert!(capability.contains("\"allow-analyze-workspace-runtime\""));
         assert!(capability.contains("\"allow-get-activity-watch-status\""));
         assert!(capability.contains("\"allow-get-activity-watch-daily-review\""));
@@ -3209,6 +3347,8 @@ mod tests {
         assert!(build.contains("\"open_repository_base\""));
         assert!(build.contains("\"send_desktop_notification\""));
         assert!(build.contains("\"clone_repository\""));
+        assert!(build.contains("\"add_trusted_repository_root_from_picker\""));
+        assert!(build.contains("\"remove_trusted_repository_root\""));
         assert!(build.contains("\"analyze_workspace_runtime\""));
         assert!(build.contains("\"get_activity_watch_status\""));
         assert!(build.contains("\"get_activity_watch_daily_review\""));
@@ -3235,6 +3375,14 @@ mod tests {
             notification_permission.contains("commands.allow = [\"send_desktop_notification\"]")
         );
         assert!(clone_permission.contains("commands.allow = [\"clone_repository\"]"));
+        assert!(
+            trusted_root_permission
+                .contains("commands.allow = [\"add_trusted_repository_root_from_picker\"]")
+        );
+        assert!(
+            remove_trusted_root_permission
+                .contains("commands.allow = [\"remove_trusted_repository_root\"]")
+        );
         assert!(runtime_permission.contains("commands.allow = [\"analyze_workspace_runtime\"]"));
         assert!(
             activity_watch_permission.contains("commands.allow = [\"get_activity_watch_status\"]")

@@ -84,7 +84,8 @@
     "category": "DeveloperTool",
     "createUpdaterArtifacts": false,
     "icon": [
-      "icons/icon.png"
+      "icons/icon.png",
+      "icons/icon.icns"
     ],
     "shortDescription": "Issue-scoped worktree and development session manager",
     "macOS": {

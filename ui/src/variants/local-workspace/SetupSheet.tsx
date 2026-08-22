@@ -45,11 +45,32 @@ export interface SetupSheetProps {
   loading: boolean;
   error?: string;
   onRefresh: () => void;
+  onRepositoriesChange?: (repositories: RepositoryCatalog) => void;
   onVerifyJira?: () => Promise<JiraMcpVerification>;
   onVerifyOpenProject?: () => Promise<OpenProjectVerification>;
   client?: WorkspaceClient;
   gitlabWorkspaceId?: string;
   appUpdate?: AppUpdateController;
+  onOpenDownloadPage?: (
+    integrationId: SetupIntegrationId,
+    destination: string,
+  ) => Promise<void>;
+}
+
+async function openOfficialDownloadPage(
+  integrationId: SetupIntegrationId,
+  destination: string,
+) {
+  const runtime = globalThis as typeof globalThis & {
+    isTauri?: boolean;
+    __TAURI_INTERNALS__?: unknown;
+  };
+  if ("__TAURI_INTERNALS__" in runtime || runtime.isTauri === true) {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("open_integration_download", { integrationId });
+    return;
+  }
+  window.open(destination, "_blank", "noopener,noreferrer");
 }
 
 type PreferenceSection = "general" | "repositories" | "integrations" | "updates";
@@ -488,6 +509,7 @@ function IntegrationRow({
   snapshotCheckedAt,
   onVerifyJira,
   onVerifyOpenProject,
+  onOpenDownloadPage,
 }: {
   definition: IntegrationDefinition;
   integration?: SetupIntegration;
@@ -495,11 +517,19 @@ function IntegrationRow({
   snapshotCheckedAt?: number;
   onVerifyJira?: () => Promise<JiraMcpVerification>;
   onVerifyOpenProject?: () => Promise<OpenProjectVerification>;
+  onOpenDownloadPage: (
+    integrationId: SetupIntegrationId,
+    destination: string,
+  ) => Promise<void>;
 }) {
   const [adapterCheck, setAdapterCheck] = useState<
     "idle" | "checking" | "ready" | "error"
   >("idle");
   const [adapterMessage, setAdapterMessage] = useState("");
+  const [downloadState, setDownloadState] = useState<
+    "idle" | "opening" | "opened" | "error"
+  >("idle");
+  const [downloadMessage, setDownloadMessage] = useState("");
   const tone = verificationTone(integration, loading);
   const consequences =
     integration?.blockingFor.map((capability) => blockingLabels[capability]) ??
@@ -540,6 +570,24 @@ function IntegrationRow({
           : `${definition.label} verification failed.`,
       );
       setAdapterCheck("error");
+    }
+  };
+
+  const openDownloadPage = async () => {
+    if (!definition.installUrl) return;
+    setDownloadState("opening");
+    setDownloadMessage("");
+    try {
+      await onOpenDownloadPage(definition.id, definition.installUrl);
+      setDownloadState("opened");
+      setDownloadMessage(`${definition.label} download page opened in your browser.`);
+    } catch (error) {
+      setDownloadState("error");
+      setDownloadMessage(
+        error instanceof Error
+          ? error.message
+          : `WTS could not open the ${definition.label} download page.`,
+      );
     }
   };
 
@@ -614,14 +662,31 @@ function IntegrationRow({
           (integration?.installation === "missing" ||
             integration?.installation === "unsupported" ||
             integration?.setup === "needsDependency") && (
-            <a
+            <div className={styles.installAction}>
+            <button
               className={styles.installLink}
-              href={definition.installUrl}
-              rel="noreferrer"
-              target="_blank"
+              disabled={downloadState === "opening"}
+              onClick={() => void openDownloadPage()}
+              type="button"
             >
-              Get {definition.label}
-            </a>
+              {downloadState === "opening" ? "Opening…" : `Get ${definition.label}`}
+            </button>
+              {downloadState === "opening" && (
+                <progress
+                  aria-label={`Opening ${definition.label} download page`}
+                  className={styles.installProgress}
+                />
+              )}
+              {downloadMessage && (
+                <small
+                  className={styles.installMessage}
+                  data-error={downloadState === "error" || undefined}
+                  role={downloadState === "error" ? "alert" : "status"}
+                >
+                  {downloadMessage}
+                </small>
+              )}
+            </div>
           )}
         {adapterMessage && (
           <small
@@ -732,6 +797,7 @@ function IntegrationsPanel({
   onRefresh,
   onVerifyJira,
   onVerifyOpenProject,
+  onOpenDownloadPage,
 }: {
   client?: WorkspaceClient;
   gitlabWorkspaceId?: string;
@@ -741,6 +807,10 @@ function IntegrationsPanel({
   onRefresh: () => void;
   onVerifyJira?: () => Promise<JiraMcpVerification>;
   onVerifyOpenProject?: () => Promise<OpenProjectVerification>;
+  onOpenDownloadPage: (
+    integrationId: SetupIntegrationId,
+    destination: string,
+  ) => Promise<void>;
 }) {
   const definitions = Object.values(integrationDefinitions);
   const counts = definitions.reduce(
@@ -833,6 +903,7 @@ function IntegrationsPanel({
                 snapshotCheckedAt={snapshot?.checkedAtUnixMs}
                 onVerifyJira={onVerifyJira}
                 onVerifyOpenProject={onVerifyOpenProject}
+                onOpenDownloadPage={onOpenDownloadPage}
               />
             ))}
           </ul>
@@ -847,14 +918,28 @@ function RepositoriesPanel({
   expectedCount,
   loading,
   onRefresh,
+  onAddTrustedRoot,
+  onRemoveTrustedRoot,
+  removingRoot,
+  addRootState,
+  addRootMessage,
 }: {
   repositories?: RepositoryCatalog;
   expectedCount?: number;
   loading: boolean;
   onRefresh: () => void;
+  onAddTrustedRoot: () => void;
+  onRemoveTrustedRoot: (rootPath: string) => void;
+  removingRoot: string;
+  addRootState: "idle" | "loading" | "error";
+  addRootMessage: string;
 }) {
   const rows = repositories?.repositories;
   const count = rows?.length ?? expectedCount;
+  const rootPaths = repositories?.repositoryRootDisplayPaths ??
+    (repositories?.repositoryRootDisplayPath
+      ? [repositories.repositoryRootDisplayPath]
+      : []);
 
   return (
     <section
@@ -880,10 +965,28 @@ function RepositoriesPanel({
           <Icon name="folder" size={17} />
         </span>
         <span>
-          <small>Primary trusted repository root</small>
-          <code>
-            {repositories?.repositoryRootDisplayPath ?? "Not reported"}
-          </code>
+          <small>Trusted repository roots</small>
+          {rootPaths.length > 0 ? (
+            rootPaths.map((path) => (
+              <span className={styles.repositoryRootPath} key={path}>
+                <code>{path}</code>
+                {repositories?.removableRepositoryRootDisplayPaths?.includes(
+                  path,
+                ) && (
+                  <button
+                    aria-label={`Remove ${path}`}
+                    disabled={addRootState === "loading"}
+                    onClick={() => onRemoveTrustedRoot(path)}
+                    type="button"
+                  >
+                    {removingRoot === path ? "Removing…" : "Remove"}
+                  </button>
+                )}
+              </span>
+            ))
+          ) : (
+            <code>Not reported</code>
+          )}
         </span>
         <strong>
           {typeof count === "number"
@@ -891,6 +994,30 @@ function RepositoriesPanel({
             : "Not scanned"}
         </strong>
       </div>
+
+      <div className={styles.repositoryRootActions}>
+        <button
+          disabled={addRootState === "loading"}
+          onClick={onAddTrustedRoot}
+          type="button"
+        >
+          <Icon name="folder" size={15} />
+          {addRootState === "loading" ? "Choosing folder…" : "Add trusted folder"}
+        </button>
+        <small>
+          Choose a folder with the native picker. WTS remembers it and scans
+          for Git repositories without modifying them.
+        </small>
+      </div>
+      {addRootMessage && (
+        <p
+          className={styles.repositoryRootMessage}
+          data-state={addRootState}
+          role={addRootState === "error" ? "alert" : "status"}
+        >
+          {addRootMessage}
+        </p>
+      )}
 
       {typeof repositories?.skippedEntries === "number" &&
         repositories.skippedEntries > 0 && (
@@ -1283,14 +1410,67 @@ export function SetupSheet({
   loading,
   error,
   onRefresh,
+  onRepositoriesChange,
   onVerifyJira,
   onVerifyOpenProject,
   client,
   gitlabWorkspaceId,
   appUpdate,
+  onOpenDownloadPage = openOfficialDownloadPage,
 }: SetupSheetProps) {
   const [activeSection, setActiveSection] =
     useState<PreferenceSection>("integrations");
+  const [addRootState, setAddRootState] = useState<
+    "idle" | "loading" | "error"
+  >("idle");
+  const [addRootMessage, setAddRootMessage] = useState("");
+  const [removingRoot, setRemovingRoot] = useState("");
+
+  const addTrustedRepositoryRoot = async () => {
+    if (!client || addRootState === "loading") return;
+    setAddRootState("loading");
+    setAddRootMessage("");
+    try {
+      const catalog = await client.addTrustedRepositoryRootFromPicker();
+      if (!catalog) {
+        setAddRootState("idle");
+        setAddRootMessage("No folder selected.");
+        return;
+      }
+      onRepositoriesChange?.(catalog);
+      setAddRootState("idle");
+      setAddRootMessage("Trusted folder added and repositories rescanned.");
+    } catch (pickerError) {
+      setAddRootState("error");
+      setAddRootMessage(
+        pickerError instanceof Error
+          ? pickerError.message
+          : "The trusted folder could not be added.",
+      );
+    }
+  };
+
+  const removeTrustedRepositoryRoot = async (rootPath: string) => {
+    if (!client || addRootState === "loading") return;
+    setAddRootState("loading");
+    setRemovingRoot(rootPath);
+    setAddRootMessage("");
+    try {
+      const catalog = await client.removeTrustedRepositoryRoot(rootPath);
+      onRepositoriesChange?.(catalog);
+      setAddRootState("idle");
+      setAddRootMessage("Trusted folder removed and repositories rescanned.");
+    } catch (removeError) {
+      setAddRootState("error");
+      setAddRootMessage(
+        removeError instanceof Error
+          ? removeError.message
+          : "The trusted folder could not be removed.",
+      );
+    } finally {
+      setRemovingRoot("");
+    }
+  };
 
   const integrations = new Map(
     snapshot?.integrations.map(
@@ -1448,10 +1628,17 @@ export function SetupSheet({
               </Tabs.Content>
               <Tabs.Content className={styles.tabPanel} value="repositories">
                 <RepositoriesPanel
+                  addRootMessage={addRootMessage}
+                  addRootState={addRootState}
                   expectedCount={snapshot?.repositoryCount}
                   loading={loading}
+                  onAddTrustedRoot={() => void addTrustedRepositoryRoot()}
+                  onRemoveTrustedRoot={(rootPath) =>
+                    void removeTrustedRepositoryRoot(rootPath)
+                  }
                   onRefresh={onRefresh}
                   repositories={repositories}
+                  removingRoot={removingRoot}
                 />
               </Tabs.Content>
               <Tabs.Content className={styles.tabPanel} value="integrations">
@@ -1463,6 +1650,7 @@ export function SetupSheet({
                   onRefresh={onRefresh}
                   onVerifyJira={onVerifyJira}
                   onVerifyOpenProject={onVerifyOpenProject}
+                  onOpenDownloadPage={onOpenDownloadPage}
                   snapshot={snapshot}
                 />
               </Tabs.Content>

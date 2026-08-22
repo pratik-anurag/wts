@@ -511,6 +511,8 @@ export interface RepositorySummary {
 
 export interface RepositoryCatalog {
   repositoryRootDisplayPath: string;
+  repositoryRootDisplayPaths?: string[];
+  removableRepositoryRootDisplayPaths?: string[];
   repositories: RepositorySummary[];
   skippedEntries: number;
 }
@@ -1944,6 +1946,8 @@ export interface WorkspaceClient {
   ): Promise<CreateWorkspaceResult>;
   getSetupSnapshot(): Promise<SetupSnapshot>;
   listRepositories(): Promise<RepositoryCatalog>;
+  addTrustedRepositoryRootFromPicker(): Promise<RepositoryCatalog | null>;
+  removeTrustedRepositoryRoot(repositoryRoot: string): Promise<RepositoryCatalog>;
   cloneRepository(
     request: CloneRepositoryRequest,
   ): Promise<CloneRepositoryResult>;
@@ -4884,6 +4888,38 @@ function normalizeRepositoryCatalog(value: unknown): RepositoryCatalog {
       raw.repositoryRootDisplayPath,
       "repositoryCatalog.repositoryRootDisplayPath",
     ),
+    ...(raw.repositoryRootDisplayPaths === undefined
+      ? {}
+      : {
+          repositoryRootDisplayPaths: Array.isArray(
+            raw.repositoryRootDisplayPaths,
+          )
+            ? raw.repositoryRootDisplayPaths.map((path, index) =>
+                stringField(
+                  path,
+                  `repositoryCatalog.repositoryRootDisplayPaths[${index}]`,
+                ),
+              )
+            : invalidPayload(
+                "repositoryCatalog.repositoryRootDisplayPaths",
+              ),
+        }),
+    ...(raw.removableRepositoryRootDisplayPaths === undefined
+      ? {}
+      : {
+          removableRepositoryRootDisplayPaths: Array.isArray(
+            raw.removableRepositoryRootDisplayPaths,
+          )
+            ? raw.removableRepositoryRootDisplayPaths.map((path, index) =>
+                stringField(
+                  path,
+                  `repositoryCatalog.removableRepositoryRootDisplayPaths[${index}]`,
+                ),
+              )
+            : invalidPayload(
+                "repositoryCatalog.removableRepositoryRootDisplayPaths",
+              ),
+        }),
     repositories: raw.repositories.map((repository, index) =>
       normalizeRepositorySummary(
         repository,
@@ -8874,6 +8910,17 @@ class HttpWorkspaceClient implements WorkspaceClient {
     );
   }
 
+  async addTrustedRepositoryRootFromPicker(): Promise<RepositoryCatalog | null> {
+    return null;
+  }
+
+  async removeTrustedRepositoryRoot(): Promise<RepositoryCatalog> {
+    throw new WorkspaceClientError(
+      "Trusted folders can only be removed in the WTS desktop app",
+      { code: "unsupported" },
+    );
+  }
+
   async cloneRepository(
     request: CloneRepositoryRequest,
   ): Promise<CloneRepositoryResult> {
@@ -10102,6 +10149,27 @@ class TauriWorkspaceClient implements WorkspaceClient {
   async listRepositories(): Promise<RepositoryCatalog> {
     return normalizeRepositoryCatalog(
       await this.invoke("list_repositories"),
+    );
+  }
+
+  async addTrustedRepositoryRootFromPicker(): Promise<RepositoryCatalog | null> {
+    const result = await this.invoke("add_trusted_repository_root_from_picker");
+    return result === null ? null : normalizeRepositoryCatalog(result);
+  }
+
+  async removeTrustedRepositoryRoot(
+    repositoryRoot: string,
+  ): Promise<RepositoryCatalog> {
+    const root = repositoryRoot.trim();
+    if (!root) {
+      throw new WorkspaceClientError("A trusted repository root is required", {
+        code: "invalid_request",
+      });
+    }
+    return normalizeRepositoryCatalog(
+      await this.invoke("remove_trusted_repository_root", {
+        repositoryRoot: root,
+      }),
     );
   }
 

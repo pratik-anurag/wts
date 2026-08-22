@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-remove-trusted-repository-root"
+description = "Enables the remove_trusted_repository_root command without any pre-configured scope."
+commands.allow = ["remove_trusted_repository_root"]
+
+[[permission]]
+identifier = "deny-remove-trusted-repository-root"
+description = "Denies the remove_trusted_repository_root command without any pre-configured scope."
+commands.deny = ["remove_trusted_repository_root"]

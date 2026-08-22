@@ -303,6 +303,12 @@ export function fakeWorkspaceClient(options: {
   const listRepositories = vi
     .fn<WorkspaceClient["listRepositories"]>()
     .mockResolvedValue(options.repositories ?? repositoryCatalogFixture());
+  const addTrustedRepositoryRootFromPicker = vi
+    .fn<WorkspaceClient["addTrustedRepositoryRootFromPicker"]>()
+    .mockResolvedValue(null);
+  const removeTrustedRepositoryRoot = vi
+    .fn<WorkspaceClient["removeTrustedRepositoryRoot"]>()
+    .mockRejectedValue(new Error("Unexpected removeTrustedRepositoryRoot call"));
   const cloneRepository = vi
     .fn<WorkspaceClient["cloneRepository"]>()
     .mockRejectedValue(new Error("Unexpected cloneRepository call"));
@@ -616,6 +622,8 @@ export function fakeWorkspaceClient(options: {
     createWorkspace,
     getSetupSnapshot,
     listRepositories,
+    addTrustedRepositoryRootFromPicker,
+    removeTrustedRepositoryRoot,
     cloneRepository,
     refreshRepositoryBranches,
     importCodeWorkspaceFile,
@@ -700,6 +708,8 @@ export function fakeWorkspaceClient(options: {
     createWorkspace,
     getSetupSnapshot,
     listRepositories,
+    addTrustedRepositoryRootFromPicker,
+    removeTrustedRepositoryRoot,
     cloneRepository,
     refreshRepositoryBranches,
     importCodeWorkspaceFile,

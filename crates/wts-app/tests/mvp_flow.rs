@@ -1401,6 +1401,142 @@ fn discovers_repositories_across_multiple_trusted_roots() {
 }
 
 #[test]
+fn added_trusted_repository_roots_are_persisted_and_rescanned() {
+    let directory = tempfile::tempdir().expect("fixture root");
+    let primary_root = directory.path().join("primary-repositories");
+    let added_root = directory.path().join("added-repositories");
+    let data_dir = directory.path().join("data");
+    let workspace_root = directory.path().join("workspaces");
+    fs::create_dir(&primary_root).expect("primary repository root");
+    fs::create_dir(&added_root).expect("added repository root");
+    create_repository(&primary_root, "checkout-api");
+    create_repository(&added_root, "checkout-web");
+
+    let service = LocalWtsService::open(
+        &data_dir,
+        "persisted-root-test",
+        &workspace_root,
+        &primary_root,
+    )
+    .expect("local service");
+    let catalog = service
+        .add_trusted_repository_root(&added_root)
+        .expect("add trusted root");
+    assert_eq!(catalog.repository_root_display_paths.len(), 2);
+    assert_eq!(catalog.removable_repository_root_display_paths.len(), 1);
+    assert!(
+        catalog
+            .repositories
+            .iter()
+            .any(|repository| repository.label == "checkout-web")
+    );
+    drop(service);
+
+    let reopened = LocalWtsService::open(
+        &data_dir,
+        "persisted-root-test",
+        &workspace_root,
+        &primary_root,
+    )
+    .expect("reopened local service");
+    let catalog = reopened.repository_catalog().expect("reopened catalog");
+    assert!(
+        catalog
+            .repositories
+            .iter()
+            .any(|repository| repository.label == "checkout-web")
+    );
+}
+
+#[test]
+fn trusted_repository_roots_can_be_removed_and_stay_removed() {
+    let directory = tempfile::tempdir().expect("fixture root");
+    let primary_root = directory.path().join("primary-repositories");
+    let added_root = directory.path().join("added-repositories");
+    let data_dir = directory.path().join("data");
+    let workspace_root = directory.path().join("workspaces");
+    fs::create_dir(&primary_root).expect("primary repository root");
+    fs::create_dir(&added_root).expect("added repository root");
+    create_repository(&primary_root, "checkout-api");
+    create_repository(&added_root, "checkout-web");
+
+    let service = LocalWtsService::open(
+        &data_dir,
+        "remove-root-test",
+        &workspace_root,
+        &primary_root,
+    )
+    .expect("local service");
+    service
+        .add_trusted_repository_root(&added_root)
+        .expect("add trusted root");
+    let catalog = service
+        .remove_trusted_repository_root(&added_root)
+        .expect("remove trusted root");
+    assert_eq!(catalog.repository_root_display_paths.len(), 1);
+    assert!(catalog.removable_repository_root_display_paths.is_empty());
+    assert!(
+        !catalog
+            .repositories
+            .iter()
+            .any(|repository| repository.label == "checkout-web")
+    );
+    drop(service);
+
+    let reopened = LocalWtsService::open(
+        &data_dir,
+        "remove-root-test",
+        &workspace_root,
+        &primary_root,
+    )
+    .expect("reopened local service");
+    assert_eq!(
+        reopened
+            .repository_catalog()
+            .expect("reopened catalog")
+            .repository_root_display_paths
+            .len(),
+        1
+    );
+}
+
+#[test]
+fn missing_trusted_repository_roots_are_pruned_automatically() {
+    let directory = tempfile::tempdir().expect("fixture root");
+    let primary_root = directory.path().join("primary-repositories");
+    let added_root = directory.path().join("added-repositories");
+    let data_dir = directory.path().join("data");
+    let workspace_root = directory.path().join("workspaces");
+    fs::create_dir(&primary_root).expect("primary repository root");
+    fs::create_dir(&added_root).expect("added repository root");
+
+    let service =
+        LocalWtsService::open(&data_dir, "prune-root-test", &workspace_root, &primary_root)
+            .expect("local service");
+    service
+        .add_trusted_repository_root(&added_root)
+        .expect("add trusted root");
+    fs::remove_dir(&added_root).expect("remove stale trusted root fixture");
+
+    let catalog = service.repository_catalog().expect("pruned catalog");
+    assert_eq!(catalog.repository_root_display_paths.len(), 1);
+    assert!(catalog.removable_repository_root_display_paths.is_empty());
+    drop(service);
+
+    let reopened =
+        LocalWtsService::open(&data_dir, "prune-root-test", &workspace_root, &primary_root)
+            .expect("reopened local service");
+    assert_eq!(
+        reopened
+            .repository_catalog()
+            .expect("reopened catalog")
+            .repository_root_display_paths
+            .len(),
+        1
+    );
+}
+
+#[test]
 fn opens_a_catalog_owned_repository_base_at_its_exact_local_commit() {
     let fixture = Fixture::new();
     git(

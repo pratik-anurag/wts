@@ -177,6 +177,12 @@
       "description": "Permission identifier",
       "oneOf": [
         {
+          "description": "Enables the add_trusted_repository_root_from_picker command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-add-trusted-repository-root-from-picker",
+          "markdownDescription": "Enables the add_trusted_repository_root_from_picker command without any pre-configured scope."
+        },
+        {
           "description": "Enables the align_workspace_repository command without any pre-configured scope.",
           "type": "string",
           "const": "allow-align-workspace-repository",
@@ -471,6 +477,12 @@
           "markdownDescription": "Enables the open_gitlab_merge_request command without any pre-configured scope."
         },
         {
+          "description": "Enables the open_integration_download command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-open-integration-download",
+          "markdownDescription": "Enables the open_integration_download command without any pre-configured scope."
+        },
+        {
           "description": "Enables the open_repository_base command without any pre-configured scope.",
           "type": "string",
           "const": "allow-open-repository-base",
@@ -591,6 +603,12 @@
           "markdownDescription": "Enables the relaunch_updated_app command without any pre-configured scope."
         },
         {
+          "description": "Enables the remove_trusted_repository_root command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-remove-trusted-repository-root",
+          "markdownDescription": "Enables the remove_trusted_repository_root command without any pre-configured scope."
+        },
+        {
           "description": "Enables the remove_workspace command without any pre-configured scope.",
           "type": "string",
           "const": "allow-remove-workspace",
@@ -703,6 +721,12 @@
           "type": "string",
           "const": "allow-write-workspace-agent-brief",
           "markdownDescription": "Enables the write_workspace_agent_brief command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the add_trusted_repository_root_from_picker command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-add-trusted-repository-root-from-picker",
+          "markdownDescription": "Denies the add_trusted_repository_root_from_picker command without any pre-configured scope."
         },
         {
           "description": "Denies the align_workspace_repository command without any pre-configured scope.",
@@ -999,6 +1023,12 @@
           "markdownDescription": "Denies the open_gitlab_merge_request command without any pre-configured scope."
         },
         {
+          "description": "Denies the open_integration_download command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-open-integration-download",
+          "markdownDescription": "Denies the open_integration_download command without any pre-configured scope."
+        },
+        {
           "description": "Denies the open_repository_base command without any pre-configured scope.",
           "type": "string",
           "const": "deny-open-repository-base",
@@ -1117,6 +1147,12 @@
           "type": "string",
           "const": "deny-relaunch-updated-app",
           "markdownDescription": "Denies the relaunch_updated_app command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the remove_trusted_repository_root command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-remove-trusted-repository-root",
+          "markdownDescription": "Denies the remove_trusted_repository_root command without any pre-configured scope."
         },
         {
           "description": "Denies the remove_workspace command without any pre-configured scope.",

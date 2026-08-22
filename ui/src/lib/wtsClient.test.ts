@@ -152,6 +152,7 @@ const setupSnapshot: SetupSnapshot = {
 
 const repositoryCatalog: RepositoryCatalog = {
   repositoryRootDisplayPath: "/Users/test/repos",
+  repositoryRootDisplayPaths: ["/Users/test/repos"],
   repositories: [
     {
       id: "repo_checkout",
@@ -3735,6 +3736,12 @@ describe("Tauri workspace client", () => {
         }
         if (command === "get_setup_snapshot") return setupSnapshot;
         if (command === "list_repositories") return repositoryCatalog;
+        if (command === "add_trusted_repository_root_from_picker") {
+          return repositoryCatalog;
+        }
+        if (command === "remove_trusted_repository_root") {
+          return repositoryCatalog;
+        }
         if (command === "preflight_workspace") return preflight;
         if (command === "get_workspace_materialization") return null;
         if (command === "materialize_workspace") return materializeResult;
@@ -3776,6 +3783,8 @@ describe("Tauri workspace client", () => {
     await client.createWorkspace(createRequest, "idem-tauri");
     await client.getSetupSnapshot();
     await client.listRepositories();
+    await client.addTrustedRepositoryRootFromPicker();
+    await client.removeTrustedRepositoryRoot(" /Users/me/projects ");
     await client.preflightWorkspace("ws-platform-42");
     await client.getWorkspaceMaterialization("ws-platform-42");
     await client.materializeWorkspace(
@@ -3802,6 +3811,11 @@ describe("Tauri workspace client", () => {
       ],
       ["get_setup_snapshot", undefined],
       ["list_repositories", undefined],
+      ["add_trusted_repository_root_from_picker", undefined],
+      [
+        "remove_trusted_repository_root",
+        { repositoryRoot: "/Users/me/projects" },
+      ],
       ["preflight_workspace", { workspaceId: "ws-platform-42" }],
       ["get_workspace_materialization", { workspaceId: "ws-platform-42" }],
       [

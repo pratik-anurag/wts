@@ -777,6 +777,7 @@
   font-size: 12px;
   font-weight: 700;
   text-decoration: none;
+  cursor: pointer;
 }
 
 .installLink:hover {
@@ -786,6 +787,47 @@
 .installLink:focus-visible {
   outline: none;
   box-shadow: var(--wts-focus-ring);
+}
+
+.installLink:disabled {
+  color: var(--wts-faint);
+  cursor: wait;
+}
+
+.installAction {
+  align-self: flex-start;
+  width: min(240px, 100%);
+  display: grid;
+  gap: 6px;
+}
+
+.installProgress {
+  width: 100%;
+  height: 4px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  color: var(--wts-blue);
+  background: var(--wts-surface-muted);
+  accent-color: var(--wts-blue);
+}
+
+.installProgress::-webkit-progress-bar {
+  background: var(--wts-surface-muted);
+  border-radius: 999px;
+}
+
+.installProgress::-webkit-progress-value {
+  background: var(--wts-blue);
+  border-radius: 999px;
+}
+
+.installMessage {
+  color: var(--pref-green) !important;
+}
+
+.installMessage[data-error] {
+  color: var(--pref-red) !important;
 }
 
 .adapterVerifyButton:hover:not(:disabled) {
@@ -1028,12 +1070,94 @@
   white-space: nowrap;
 }
 
+.repositoryRootPath {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.repositoryRootPath code {
+  min-width: 0;
+  flex: 1;
+}
+
+.repositoryRootPath button {
+  padding: 3px 7px;
+  color: var(--wts-red);
+  background: transparent;
+  border: 1px solid var(--wts-line);
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.repositoryRootPath button:hover:not(:disabled) {
+  background: var(--pref-red-soft);
+}
+
+.repositoryRootPath button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
 .repositoryRoot strong {
   padding: 4px 7px;
   color: var(--wts-text);
   background: var(--wts-surface-muted);
   border-radius: 10px;
   font-size: 12px;
+}
+
+.repositoryRootActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: -3px 0 14px;
+}
+
+.repositoryRootActions button {
+  display: inline-flex;
+  min-height: 34px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px;
+  color: var(--wts-surface);
+  background: var(--wts-ink);
+  border: 1px solid var(--wts-ink);
+  border-radius: 7px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.repositoryRootActions button:hover:not(:disabled) {
+  opacity: 0.86;
+}
+
+.repositoryRootActions button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.repositoryRootActions small {
+  color: var(--wts-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.repositoryRootMessage {
+  margin: -5px 0 12px;
+  color: var(--wts-muted);
+  font-size: 12px;
+}
+
+.repositoryRootMessage[data-state="error"] {
+  color: var(--wts-red);
 }
 
 .skippedNotice {

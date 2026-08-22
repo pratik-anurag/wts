@@ -5431,6 +5431,10 @@ describe("personal local workspace registry", () => {
     await user.click(
       within(dialog).getByRole("radio", { name: /^Repositories/i }),
     );
+    await user.type(
+      within(dialog).getByRole("textbox", { name: "Workspace name" }),
+      "Payments platform",
+    );
     expect(
       within(dialog).getByRole("combobox", { name: "Repository to add" }),
     ).toBeDisabled();
@@ -5447,6 +5451,7 @@ describe("personal local workspace registry", () => {
     await user.click(
       within(dialog).getByRole("button", { name: /Review repositories/i }),
     );
+    expect(within(dialog).getAllByText("Payments platform").length).toBeGreaterThan(0);
     expect(
       within(dialog).getByRole("combobox", {
         name: "Base branch for checkout-api [repo_checkout]",
