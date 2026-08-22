@@ -22,15 +22,15 @@ use wts_app::{
     OpenWorkspaceChangeRequestDraft, OpenWorkspaceChangeRequestResult,
     OpenWorkspaceGitlabMergeRequestResult, OpenWorkspaceJiraPreviewRequest, OpenWorkspaceResult,
     OpenWorkspaceWorkItemRequest, OpenWorkspaceWorkItemResult, PrepareWorkspaceChangeRequest,
-    PreviewWorkspaceJiraLinkRequest, PublishGitlabReviewCommentResult,
-    RefreshRepositoryBranchesRequest, RefreshRepositoryBranchesResult, RemoveWorkspaceResult,
-    RepositoryCatalog, ResolveWorkspaceReviewThreadRequest, RuntimeAnalysisRequest,
-    RuntimeAnalysisResult, TerminalProvider, TestRunList, TestRunResult, TestRunSummary,
-    UnlinkWorkspaceWorkItemRequest, UpdateWorkspacePlanningDocumentRequest,
-    WorkspaceAgentBriefResult, WorkspaceChangeRequestDraft, WorkspaceCliLaunchResult,
-    WorkspaceEvidence, WorkspaceMaterialization, WorkspacePlanningDocument,
-    WorkspacePlanningDocumentId, WorkspacePlanningDocumentList, WorkspacePreflight,
-    WorkspaceRemovalPreflight, WorkspaceRepositoryAlignmentPreflight,
+    PreviewWorkspaceJiraLinkRequest, ProcessExternalLauncher, ProcessWorkspaceAdapter,
+    PublishGitlabReviewCommentResult, RefreshRepositoryBranchesRequest,
+    RefreshRepositoryBranchesResult, RemoveWorkspaceResult, RepositoryCatalog,
+    ResolveWorkspaceReviewThreadRequest, RuntimeAnalysisRequest, RuntimeAnalysisResult,
+    TerminalProvider, TestRunList, TestRunResult, TestRunSummary, UnlinkWorkspaceWorkItemRequest,
+    UpdateWorkspacePlanningDocumentRequest, WorkspaceAgentBriefResult, WorkspaceChangeRequestDraft,
+    WorkspaceCliLaunchResult, WorkspaceEvidence, WorkspaceMaterialization,
+    WorkspacePlanningDocument, WorkspacePlanningDocumentId, WorkspacePlanningDocumentList,
+    WorkspacePreflight, WorkspaceRemovalPreflight, WorkspaceRepositoryAlignmentPreflight,
     WorkspaceRepositoryAlignmentResult, WorkspaceRepositoryDiff, WorkspaceRepositoryFileReview,
     WorkspaceRepositoryReviewGraph, WorkspaceRepositorySyncResult, WorkspaceReviewThread,
     WorkspaceReviewThreadList, WorkspaceWorkItemLinkList, WorkspaceWorkItemLinkPreview,
@@ -48,7 +48,7 @@ use wts_integrations::{
     ActivityWatchDailyReview, ActivityWatchError, ActivityWatchReviewError, ActivityWatchStatus,
     GithubReviewInbox, GitlabIntegrationStatus, GitlabMergeRequestInbox, GitlabReviewInbox,
     IntegrationId, JiraActiveIssueList, JiraMcpVerification, OpenProjectError,
-    OpenProjectVerification, SetupSnapshot, TimeReviewAgentBrief,
+    OpenProjectVerification, PathResolver, SetupSnapshot, SystemPathResolver, TimeReviewAgentBrief,
 };
 use wts_store::{
     CreateWorkspaceResult, WorkspaceList, WorkspaceStoreError, WorkspaceView,
@@ -130,10 +130,8 @@ fn integration_download_url(integration_id: IntegrationId) -> Option<&'static st
         IntegrationId::Iterm2 => Some("https://iterm2.com/downloads.html"),
         IntegrationId::Codex => Some("https://developers.openai.com/codex/cli"),
         IntegrationId::OpenCode => Some("https://opencode.ai/docs"),
-        IntegrationId::Hermes
-        | IntegrationId::Graphify
-        | IntegrationId::JiraMcp
-        | IntegrationId::OpenProject => None,
+        IntegrationId::Graphify => Some("https://github.com/Graphify-Labs/graphify"),
+        IntegrationId::Hermes | IntegrationId::JiraMcp | IntegrationId::OpenProject => None,
     }
 }
 
@@ -2054,11 +2052,19 @@ fn local_wts_service(app: &tauri::AppHandle) -> Result<LocalWtsService, LocalWts
                 .into_iter()
                 .collect(),
         };
-    LocalWtsService::open_with_repository_roots(
+    let adapter = SystemPathResolver
+        .resolve("graphify")
+        .ok()
+        .flatten()
+        .map(|executable| ProcessWorkspaceAdapter::default().with_graphify_executable(executable))
+        .unwrap_or_default();
+    LocalWtsService::open_with_repository_roots_launcher_and_adapter(
         data_dir,
         WORKSPACE_ROOT_ID,
         workspace_root,
         repository_roots,
+        ProcessExternalLauncher,
+        adapter,
     )
 }
 
@@ -3213,6 +3219,10 @@ mod tests {
         assert_eq!(
             integration_download_url(IntegrationId::Warp),
             Some("https://www.warp.dev/download")
+        );
+        assert_eq!(
+            integration_download_url(IntegrationId::Graphify),
+            Some("https://github.com/Graphify-Labs/graphify")
         );
         assert_eq!(integration_download_url(IntegrationId::JiraMcp), None);
 

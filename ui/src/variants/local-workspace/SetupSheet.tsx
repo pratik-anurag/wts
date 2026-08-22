@@ -51,6 +51,9 @@ export interface SetupSheetProps {
   onVerifyOpenProject?: () => Promise<OpenProjectVerification>;
   client?: WorkspaceClient;
   gitlabWorkspaceId?: string;
+  graphifyWorkspaceLabel?: string;
+  graphifyWorkspaceReady?: boolean;
+  onRunGraphify?: () => Promise<void>;
   appUpdate?: AppUpdateController;
   onOpenDownloadPage?: (
     integrationId: SetupIntegrationId,
@@ -125,6 +128,7 @@ const integrationDefinitions: Record<
     mark: "GF",
     description: "Workspace knowledge index",
     capability: "Build a graph scoped to the active worktree set",
+    installUrl: "https://github.com/Graphify-Labs/graphify",
   },
   codex: {
     id: "codex",
@@ -511,6 +515,10 @@ function IntegrationRow({
   onVerifyJira,
   onVerifyOpenProject,
   onOpenDownloadPage,
+  graphifyWorkspaceLabel,
+  graphifyWorkspaceReady,
+  onRunGraphify,
+  onRefresh,
 }: {
   definition: IntegrationDefinition;
   integration?: SetupIntegration;
@@ -522,6 +530,10 @@ function IntegrationRow({
     integrationId: SetupIntegrationId,
     destination: string,
   ) => Promise<void>;
+  graphifyWorkspaceLabel?: string;
+  graphifyWorkspaceReady?: boolean;
+  onRunGraphify?: () => Promise<void>;
+  onRefresh: () => void;
 }) {
   const [adapterCheck, setAdapterCheck] = useState<
     "idle" | "checking" | "ready" | "error"
@@ -531,6 +543,10 @@ function IntegrationRow({
     "idle" | "opening" | "opened" | "error"
   >("idle");
   const [downloadMessage, setDownloadMessage] = useState("");
+  const [graphifyState, setGraphifyState] = useState<
+    "idle" | "running" | "ready" | "error"
+  >("idle");
+  const [graphifyMessage, setGraphifyMessage] = useState("");
   const tone = verificationTone(integration, loading);
   const consequences =
     integration?.blockingFor.map((capability) => blockingLabels[capability]) ??
@@ -588,6 +604,27 @@ function IntegrationRow({
         error instanceof Error
           ? error.message
           : `WTS could not open the ${definition.label} download page.`,
+      );
+    }
+  };
+
+  const runGraphify = async () => {
+    if (!onRunGraphify || graphifyState === "running") return;
+    setGraphifyState("running");
+    setGraphifyMessage("");
+    try {
+      await onRunGraphify();
+      setGraphifyState("ready");
+      setGraphifyMessage(
+        `Graphify completed for ${graphifyWorkspaceLabel}. Integration checks are refreshing.`,
+      );
+      onRefresh();
+    } catch (error) {
+      setGraphifyState("error");
+      setGraphifyMessage(
+        error instanceof Error
+          ? error.message
+          : "Graphify could not index the selected workspace.",
       );
     }
   };
@@ -689,6 +726,37 @@ function IntegrationRow({
               )}
             </div>
           )}
+        {definition.id === "graphify" && graphifyWorkspaceLabel && (
+          <div className={styles.graphifyWorkspaceAction}>
+            <button
+              className={styles.adapterVerifyButton}
+              disabled={
+                graphifyState === "running" ||
+                loading ||
+                integration?.installation !== "detected" ||
+                !graphifyWorkspaceReady ||
+                !onRunGraphify
+              }
+              onClick={() => void runGraphify()}
+              type="button"
+            >
+              {graphifyState === "running"
+                ? "Running Graphify…"
+                : `Run on ${graphifyWorkspaceLabel}`}
+            </button>
+            {!graphifyWorkspaceReady && (
+              <small>Materialize the selected workspace before indexing it.</small>
+            )}
+            {graphifyMessage && (
+              <small
+                data-error={graphifyState === "error" || undefined}
+                role={graphifyState === "error" ? "alert" : "status"}
+              >
+                {graphifyMessage}
+              </small>
+            )}
+          </div>
+        )}
         {adapterMessage && (
           <small
             className={styles.adapterCheckMessage}
@@ -792,20 +860,26 @@ function RefreshButton({
 function IntegrationsPanel({
   client,
   gitlabWorkspaceId,
+  graphifyWorkspaceLabel,
+  graphifyWorkspaceReady,
   snapshot,
   integrations,
   loading,
   onRefresh,
+  onRunGraphify,
   onVerifyJira,
   onVerifyOpenProject,
   onOpenDownloadPage,
 }: {
   client?: WorkspaceClient;
   gitlabWorkspaceId?: string;
+  graphifyWorkspaceLabel?: string;
+  graphifyWorkspaceReady?: boolean;
   snapshot?: SetupSnapshot;
   integrations: Map<SetupIntegrationId, SetupIntegration>;
   loading: boolean;
   onRefresh: () => void;
+  onRunGraphify?: () => Promise<void>;
   onVerifyJira?: () => Promise<JiraMcpVerification>;
   onVerifyOpenProject?: () => Promise<OpenProjectVerification>;
   onOpenDownloadPage: (
@@ -899,8 +973,12 @@ function IntegrationsPanel({
               <IntegrationRow
                 definition={integrationDefinitions[id]}
                 integration={integrations.get(id)}
+                graphifyWorkspaceLabel={graphifyWorkspaceLabel}
+                graphifyWorkspaceReady={graphifyWorkspaceReady}
                 key={id}
                 loading={loading}
+                onRefresh={onRefresh}
+                onRunGraphify={onRunGraphify}
                 snapshotCheckedAt={snapshot?.checkedAtUnixMs}
                 onVerifyJira={onVerifyJira}
                 onVerifyOpenProject={onVerifyOpenProject}
@@ -1408,6 +1486,9 @@ export function SetupSheet({
   onVerifyOpenProject,
   client,
   gitlabWorkspaceId,
+  graphifyWorkspaceLabel,
+  graphifyWorkspaceReady,
+  onRunGraphify,
   appUpdate,
   onOpenDownloadPage = openOfficialDownloadPage,
 }: SetupSheetProps) {
@@ -1638,9 +1719,12 @@ export function SetupSheet({
                 <IntegrationsPanel
                   client={client}
                   gitlabWorkspaceId={gitlabWorkspaceId}
+                  graphifyWorkspaceLabel={graphifyWorkspaceLabel}
+                  graphifyWorkspaceReady={graphifyWorkspaceReady}
                   integrations={integrations}
                   loading={loading}
                   onRefresh={onRefresh}
+                  onRunGraphify={onRunGraphify}
                   onVerifyJira={onVerifyJira}
                   onVerifyOpenProject={onVerifyOpenProject}
                   onOpenDownloadPage={onOpenDownloadPage}

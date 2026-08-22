@@ -316,6 +316,13 @@ The menu keeps infrequent lifecycle commands in one predictable place:
 - **Refresh status** revalidates the saved plan, manifest, and worktrees.
 - **Build graph** or **Re-index graph** runs Graphify for the current
   worktree contents.
+- You can also open **Settings → Integrations** and choose **Run on `<workspace>`**
+  in the Graphify row. This action is available only for the currently open,
+  materialized workspace and automatically refreshes the integration checks
+  after Graphify finishes.
+- If Graphify is missing, choose **Get Graphify** to open its official project,
+  install the `graphify` executable, and then choose **Verify all**. WTS also
+  recognizes user tools installed in `~/.local/bin` when launched from Finder.
 - **Create revised copy** starts a new editable plan using this workspace's
   repository and provider setup. The original record remains immutable.
 - **Remove workspace** opens a read-only effects preview before anything is

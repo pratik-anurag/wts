@@ -181,6 +181,53 @@ afterEach(() => {
 });
 
 describe("SetupSheet", () => {
+  it("runs Graphify for the selected workspace and refreshes checks", async () => {
+    const user = userEvent.setup();
+    const onRefresh = vi.fn();
+    const onRunGraphify = vi.fn().mockResolvedValue(undefined);
+    const graphifySnapshot: SetupSnapshot = {
+      ...snapshot,
+      integrations: snapshot.integrations.map((integration) =>
+        integration.id === "graphify"
+          ? {
+              ...integration,
+              status: "ready" as const,
+              installation: "detected" as const,
+              setup: "notRequired" as const,
+              blockingFor: [],
+              version: "0.8.42",
+            }
+          : integration,
+      ),
+    };
+
+    render(
+      <SetupSheet
+        graphifyWorkspaceLabel="PLATFORM-42"
+        graphifyWorkspaceReady
+        loading={false}
+        onOpenChange={vi.fn()}
+        onRefresh={onRefresh}
+        onRunGraphify={onRunGraphify}
+        open
+        repositories={repositories}
+        snapshot={graphifySnapshot}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Run on PLATFORM-42" }),
+    );
+
+    expect(onRunGraphify).toHaveBeenCalledOnce();
+    expect(onRefresh).toHaveBeenCalledOnce();
+    expect(
+      await screen.findByText(
+        "Graphify completed for PLATFORM-42. Integration checks are refreshing.",
+      ),
+    ).toBeVisible();
+  });
+
   it("offers official install pages for missing tools and explains terminal choices", async () => {
     const user = userEvent.setup();
     let resolveCodexDownload!: () => void;
@@ -266,9 +313,14 @@ describe("SetupSheet", () => {
 
     await user.click(screen.getByRole("button", { name: "Get OpenCode" }));
     await user.click(screen.getByRole("button", { name: "Get Warp" }));
+    await user.click(screen.getByRole("button", { name: "Get Graphify" }));
     expect(onOpenDownloadPage).toHaveBeenCalledWith(
       "openCode",
       "https://opencode.ai/docs",
+    );
+    expect(onOpenDownloadPage).toHaveBeenCalledWith(
+      "graphify",
+      "https://github.com/Graphify-Labs/graphify",
     );
     expect(onOpenDownloadPage).toHaveBeenCalledWith(
       "warp",
@@ -441,7 +493,7 @@ describe("SetupSheet", () => {
         /bounded nested scan across configured trusted local roots/i,
       ),
     ).toBeVisible();
-    expect(screen.getByText("Primary trusted repository root")).toBeVisible();
+    expect(screen.getByText("Trusted repository roots")).toBeVisible();
     expect(screen.getByText("checkout-api-main")).toBeVisible();
     expect(
       screen.getByText("Checkout folder · checkout-api"),

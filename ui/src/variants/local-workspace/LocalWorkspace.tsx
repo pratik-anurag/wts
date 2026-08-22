@@ -11695,7 +11695,7 @@ export function LocalWorkspace({
     return result;
   };
 
-  const reindexSelectedWorkspaceGraph = async () => {
+  const reindexSelectedWorkspaceGraph = async (propagateError = false) => {
     if (!selectedWorkspace || workspaceCommandState !== "idle") {
       return;
     }
@@ -11752,11 +11752,22 @@ export function LocalWorkspace({
         error instanceof WorkspaceClientError ? error.code : "",
       );
       setNotice(`${workspaceKey} · re-index failed`);
+      if (propagateError) throw error;
     } finally {
       if (actionGeneration === workspaceActionGenerationRef.current) {
         setWorkspaceCommandState("idle");
       }
     }
+  };
+
+  const runSelectedWorkspaceGraphFromSetup = async () => {
+    if (!selectedWorkspace || !workspaceMaterialization) {
+      throw new Error("Open a materialized workspace before running Graphify.");
+    }
+    if (workspaceCommandState !== "idle") {
+      throw new Error("Wait for the current workspace command to finish.");
+    }
+    await reindexSelectedWorkspaceGraph(true);
   };
 
   const syncSelectedWorkspaceRepository = async (
@@ -13803,6 +13814,17 @@ export function LocalWorkspace({
         <SetupSheet
           client={client}
           gitlabWorkspaceId={selectedWorkspace?.id}
+          graphifyWorkspaceLabel={
+            view === "workbench" ? selectedWorkspace?.key : undefined
+          }
+          graphifyWorkspaceReady={
+            view === "workbench" && Boolean(workspaceMaterialization)
+          }
+          onRunGraphify={
+            view === "workbench" && selectedWorkspace
+              ? runSelectedWorkspaceGraphFromSetup
+              : undefined
+          }
           open={setupOpen}
           onOpenChange={setSetupOpen}
           snapshot={setupSnapshot ?? undefined}

@@ -830,6 +830,17 @@
   color: var(--pref-red) !important;
 }
 
+.graphifyWorkspaceAction {
+  align-self: flex-start;
+  display: grid;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.graphifyWorkspaceAction small[data-error] {
+  color: var(--pref-red);
+}
+
 .adapterVerifyButton:hover:not(:disabled) {
   background: var(--wts-blue-soft);
   border-color: color-mix(in srgb, var(--wts-blue) 42%, var(--wts-line));

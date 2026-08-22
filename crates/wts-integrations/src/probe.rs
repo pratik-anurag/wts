@@ -415,6 +415,18 @@ impl PathResolver for SystemPathResolver {
                 }
             }
         }
+
+        // `uv tool install` and several provider installers use this per-user
+        // executable directory. Finder-launched apps do not normally inherit it.
+        #[cfg(unix)]
+        if let Some(home) = std::env::var_os("HOME") {
+            let directory = PathBuf::from(home).join(".local/bin");
+            for candidate in executable_candidates(&directory, executable) {
+                if is_executable_file(&candidate) {
+                    return Ok(Some(candidate));
+                }
+            }
+        }
         Ok(None)
     }
 }
