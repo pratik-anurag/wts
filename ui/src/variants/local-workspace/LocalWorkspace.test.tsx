@@ -2833,7 +2833,7 @@ describe("personal local workspace registry", () => {
       }),
     ).toHaveAttribute("aria-busy", "true");
     expect(
-      screen.queryByRole("button", { name: "Open Codex in Terminal" }),
+      screen.queryByRole("button", { name: "Open Codex in Default Terminal" }),
     ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /Spaces/ }));
@@ -4533,7 +4533,7 @@ describe("personal local workspace registry", () => {
       within(panel).getByRole("button", { name: "Open OpenCode" }),
     ).toBeDisabled();
     expect(within(panel).getByRole("status")).toHaveTextContent(
-      /Opening Codex in Terminal/i,
+      /Opening Codex in Default Terminal/i,
     );
 
     await act(async () => {
@@ -4552,14 +4552,14 @@ describe("personal local workspace registry", () => {
       within(panel).getByRole("button", { name: "Open OpenCode" }),
     ).toBeEnabled();
     expect(within(panel).getByRole("status")).toHaveTextContent(
-      /Codex opened in Terminal/i,
+      /Codex opened in Default Terminal/i,
     );
     expect(within(panel).queryByText("Running")).not.toBeInTheDocument();
     expect(fake.runWorkspaceAgent).not.toHaveBeenCalled();
     expect(fake.getWorkspaceEvidence).not.toHaveBeenCalled();
   });
 
-  it("prefers an installed Warp app for a workspace CLI handoff", async () => {
+  it("keeps Default Terminal selected when optional Warp is installed", async () => {
     const user = userEvent.setup();
     const persisted = workspaceFixture({
       lifecycle: {
@@ -4591,7 +4591,7 @@ describe("personal local workspace registry", () => {
     fake.openWorkspaceCli.mockResolvedValue({
       workspaceId: persisted.workspaceId,
       provider: "codex",
-      terminal: "warp",
+      terminal: "terminal",
       accepted: true,
       workspaceDisplayPath: persisted.workspaceDisplayPath,
     });
@@ -4605,17 +4605,17 @@ describe("personal local workspace registry", () => {
       name: "Open workspace",
     });
     expect(
-      within(panel).getByRole("button", { name: "Warp" }),
+      within(panel).getByRole("button", { name: "Default Terminal" }),
     ).toHaveAttribute("aria-pressed", "true");
     await user.click(within(panel).getByRole("button", { name: "Open Codex" }));
 
     expect(fake.openWorkspaceCli).toHaveBeenCalledWith(
       persisted.workspaceId,
       "codex",
-      "warp",
+      "terminal",
     );
     expect(within(panel).getByRole("status")).toHaveTextContent(
-      /Codex opened in Warp/i,
+      /Codex opened in Default Terminal/i,
     );
   });
 
@@ -9666,7 +9666,7 @@ describe("personal local workspace registry", () => {
     );
     expect(
       screen.getByText(
-        /Codex opened in Terminal\. It can read WTS\.md from the workspace root/i,
+        /Codex opened in Default Terminal\. It can read WTS\.md from the workspace root/i,
       ),
     ).toBeVisible();
   }, 10_000);

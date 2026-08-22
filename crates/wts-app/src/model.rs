@@ -730,6 +730,7 @@ pub struct WorkspaceAgentBriefResult {
 pub enum TerminalProvider {
     Terminal,
     Warp,
+    Iterm2,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

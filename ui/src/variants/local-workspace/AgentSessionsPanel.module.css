@@ -759,6 +759,208 @@
   margin: 0 2px 8px;
 }
 
+.parallelWork,
+.usageRollup {
+  margin-bottom: 14px;
+  overflow: hidden;
+  background: var(--wts-surface);
+  border: 1px solid var(--wts-line);
+  border-radius: 8px;
+  box-shadow: var(--wts-shadow-sm);
+}
+
+.parallelWork > header,
+.usageRollup > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 14px;
+  background: var(--wts-surface-subtle);
+  border-bottom: 1px solid var(--wts-line);
+}
+
+.parallelWork > header > div,
+.usageRollup > header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.parallelWork h3,
+.usageRollup h3 {
+  margin: 0;
+  color: var(--wts-ink);
+  font-size: 13px;
+}
+
+.parallelWork header small,
+.usageRollup header small {
+  color: var(--wts-muted);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+}
+
+.parallelWork header p {
+  margin: 2px 0 0;
+  color: var(--wts-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.parallelWork button,
+.parallelActions button {
+  min-height: 34px;
+  padding: 0 12px;
+  color: var(--wts-blue);
+  background: var(--wts-surface);
+  border: 1px solid var(--wts-line);
+  border-radius: var(--wts-radius-sm);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.parallelWork button:focus-visible,
+.workspacePicker input:focus-visible,
+.parallelTask textarea:focus-visible {
+  outline: none;
+  box-shadow: var(--wts-focus-ring);
+}
+
+.parallelWork button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.parallelEmpty {
+  padding: 18px 14px;
+  color: var(--wts-muted);
+  font-size: 12px;
+}
+
+.workspacePicker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--wts-line);
+}
+
+.workspacePicker legend {
+  padding-top: 10px;
+  color: var(--wts-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.workspacePicker label {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px;
+  background: var(--wts-surface-subtle);
+  border: 1px solid var(--wts-line);
+  border-radius: var(--wts-radius-sm);
+}
+
+.workspacePicker label > span {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.workspacePicker strong,
+.workspacePicker small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspacePicker strong {
+  color: var(--wts-ink);
+  font-size: 12px;
+}
+
+.workspacePicker small {
+  color: var(--wts-faint);
+  font-size: 12px;
+}
+
+.parallelTask {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+}
+
+.parallelTask > span {
+  color: var(--wts-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.parallelTask textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  padding: 9px 10px;
+  color: var(--wts-ink);
+  background: var(--wts-surface);
+  border: 1px solid var(--wts-line);
+  border-radius: var(--wts-radius-sm);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.parallelActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 14px 12px;
+}
+
+.parallelActions > span,
+.usageRollup > header > span {
+  color: var(--wts-muted);
+  font-size: 12px;
+}
+
+.parallelActions > span[data-error] {
+  color: var(--wts-red);
+}
+
+.usageRollup ul {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.usageRollup li {
+  display: grid;
+  gap: 2px;
+  padding: 10px 14px;
+  border-right: 1px solid var(--wts-line);
+}
+
+.usageRollup li strong,
+.usageRollup li span {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usageRollup li strong { color: var(--wts-ink); }
+.usageRollup li span { color: var(--wts-muted); }
+
 .listHeader > div {
   display: grid;
   gap: 2px;
@@ -797,7 +999,7 @@
   display: grid;
   grid-template-columns:
     8px minmax(120px, 0.7fr) minmax(180px, 1.3fr)
-    minmax(130px, auto) auto;
+    minmax(105px, auto) minmax(125px, auto) auto;
   align-items: center;
   gap: 11px;
   min-height: 55px;
@@ -839,21 +1041,24 @@
 
 .sessionIdentity,
 .workspaceIdentity,
-.sessionTiming {
+.sessionTiming,
+.usageIdentity {
   display: grid;
   min-width: 0;
 }
 
 .sessionIdentity strong,
 .workspaceIdentity strong,
-.sessionTiming strong {
+.sessionTiming strong,
+.usageIdentity strong {
   color: var(--wts-ink);
   font-size: 12px;
 }
 
 .sessionIdentity span,
 .workspaceIdentity span,
-.sessionTiming time {
+.sessionTiming time,
+.usageIdentity span {
   overflow: hidden;
   color: var(--wts-faint);
   font-size: 12px;
@@ -862,6 +1067,10 @@
 }
 
 .sessionTiming {
+  text-align: right;
+}
+
+.usageIdentity {
   text-align: right;
 }
 
@@ -1018,9 +1227,26 @@
     text-align: left;
   }
 
+  .usageIdentity {
+    grid-column: 2;
+    text-align: left;
+  }
+
   .status {
     grid-column: 3;
     grid-row: 1 / span 2;
+  }
+
+
+  .workspacePicker,
+  .usageRollup ul {
+    grid-template-columns: 1fr;
+  }
+
+  .parallelWork > header,
+  .parallelActions {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 

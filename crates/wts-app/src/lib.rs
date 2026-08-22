@@ -31,7 +31,7 @@ pub use agent_observation::{
 pub use agent_session_details::{
     AGENT_SESSION_DETAIL_SCHEMA_VERSION, AgentModelAuthority, AgentModelSelection,
     AgentProcessEvent, AgentProcessEventKind, AgentSessionDetail, AgentSessionEvent,
-    AgentSessionEventKind,
+    AgentSessionEventKind, AgentTokenUsage,
 };
 pub use agent_sessions::{
     AGENT_SESSION_SCHEMA_VERSION, AgentChangeRequestProposal, AgentChangeRequestVerification,

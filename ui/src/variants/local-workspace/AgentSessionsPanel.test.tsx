@@ -58,6 +58,60 @@ describe("AgentSessionsPanel", () => {
     localStorage.clear();
   });
 
+  it("starts one Codex task in each selected materialized workspace", async () => {
+    const user = userEvent.setup();
+    const fake = fakeWorkspaceClient();
+    fake.launchAgentSession.mockImplementation(async (workspaceId) => ({
+      schemaVersion: 1,
+      sessionId: `session-${workspaceId}`,
+      workspaceId,
+      provider: "codex",
+      terminal: "terminal",
+      category: "implementation",
+      status: "launching",
+      startedAtUnixMs: Date.now(),
+      lastHeartbeatAtUnixMs: Date.now(),
+      endedAtUnixMs: null,
+      failure: null,
+    }));
+
+    render(
+      <AgentSessionsPanel
+        client={fake.client}
+        workspaceLabels={{
+          "workspace-auth": { key: "AUTH-12", title: "Authentication" },
+          "workspace-search": { key: "SEARCH-8", title: "Search" },
+        }}
+        workspaceOptions={[
+          { id: "workspace-auth", key: "AUTH-12", title: "Authentication", materialized: true },
+          { id: "workspace-search", key: "SEARCH-8", title: "Search", materialized: true },
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole("tab", { name: "Agent activity" }));
+    await user.click(screen.getByLabelText("AUTH-12: Authentication"));
+    await user.click(screen.getByLabelText("SEARCH-8: Search"));
+    await user.type(
+      screen.getByLabelText("Task for every selected workspace"),
+      "Implement the branch task and run checks.",
+    );
+    await user.click(screen.getByRole("button", { name: "Start 2 agents" }));
+
+    await waitFor(() => expect(fake.launchAgentSession).toHaveBeenCalledTimes(2));
+    expect(fake.launchAgentSession).toHaveBeenNthCalledWith(1, "workspace-auth", {
+      provider: "codex",
+      category: "implementation",
+      prompt: "Implement the branch task and run checks.",
+    });
+    expect(fake.launchAgentSession).toHaveBeenNthCalledWith(2, "workspace-search", {
+      provider: "codex",
+      category: "implementation",
+      prompt: "Implement the branch task and run checks.",
+    });
+    expect(await screen.findByText("Codex started in 2 isolated workspaces.")).toBeVisible();
+  });
+
   it("collates transcript-free sessions across workspaces and keeps attention distinct", async () => {
     const user = userEvent.setup();
     const startedAtUnixMs = Date.now() - 75_000;

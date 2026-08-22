@@ -67,8 +67,9 @@ const providerCommands: Record<AgentProvider, string> = {
 };
 
 const terminalNames: Record<TerminalProvider, string> = {
-  terminal: "Terminal",
+  terminal: "Default Terminal",
   warp: "Warp",
+  iterm2: "iTerm2",
 };
 
 function agentProviderFromPreference(
@@ -81,12 +82,9 @@ function agentProviderFromPreference(
 }
 
 function preferredTerminal(
-  integrations: SetupSnapshot["integrations"] | undefined,
+  _integrations: SetupSnapshot["integrations"] | undefined,
 ): TerminalProvider {
-  const warp = integrations?.find((item) => item.id === "warp");
-  return warp?.installation === "detected" && warp.status !== "error"
-    ? "warp"
-    : "terminal";
+  return "terminal";
 }
 
 function providerSetupLabel(
@@ -149,6 +147,9 @@ export function OpenWorkspaceLauncher({
   const warp = integrations?.find((item) => item.id === "warp");
   const warpAvailable =
     warp?.installation === "detected" && warp.status !== "error";
+  const iterm2 = integrations?.find((item) => item.id === "iterm2");
+  const iterm2Available =
+    iterm2?.installation === "detected" && iterm2.status !== "error";
   const briefBlocksAgents =
     preparedBrief !== undefined && preparedBrief.state !== "ready";
 
@@ -361,10 +362,14 @@ export function OpenWorkspaceLauncher({
               <span className={styles.terminalPicker}>
                 <span>Open agents in</span>
                 <span aria-label="Terminal application" role="group">
-                  {(["warp", "terminal"] as const).map((item) => (
+                  {(["terminal", "iterm2", "warp"] as const).map((item) => (
                     <button
                       aria-pressed={terminal === item}
-                      disabled={pending || (item === "warp" && !warpAvailable)}
+                      disabled={
+                        pending ||
+                        (item === "warp" && !warpAvailable) ||
+                        (item === "iterm2" && !iterm2Available)
+                      }
                       key={item}
                       onClick={() => {
                         setTerminal(item);
@@ -374,6 +379,8 @@ export function OpenWorkspaceLauncher({
                       title={
                         item === "warp" && !warpAvailable
                           ? "Warp.app was not detected in Applications"
+                          : item === "iterm2" && !iterm2Available
+                            ? "iTerm.app was not detected in Applications"
                           : undefined
                       }
                       type="button"

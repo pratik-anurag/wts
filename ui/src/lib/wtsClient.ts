@@ -381,6 +381,7 @@ export type IntegrationId =
   | "git"
   | "vscode"
   | "warp"
+  | "iterm2"
   | "codex"
   | "openCode"
   | "hermes"
@@ -432,6 +433,7 @@ export interface IntegrationSnapshot {
     | "worktreeMaterialization"
     | "vscodeLaunch"
     | "warpLaunch"
+    | "iterm2Launch"
     | "codexLaunch"
     | "openCodeLaunch"
     | "hermesLaunch"
@@ -1053,7 +1055,7 @@ export const DOWNLOAD_AND_INSTALL_UPDATE_TAURI_COMMAND =
 export const RELAUNCH_UPDATED_APP_TAURI_COMMAND = "relaunch_updated_app";
 
 export type AgentProvider = "codex" | "openCode" | "hermes";
-export type TerminalProvider = "terminal" | "warp";
+export type TerminalProvider = "terminal" | "warp" | "iterm2";
 
 export interface WorkspaceCliLaunchResult {
   workspaceId: string;
@@ -1783,6 +1785,12 @@ export interface AgentSessionDetail {
     model?: string;
     reasoningEffort?: string;
   };
+  tokenUsage?: {
+    inputTokens: number;
+    cachedInputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  };
   events: AgentSessionEvent[];
   eventsTruncated: boolean;
 }
@@ -2144,12 +2152,14 @@ const agentProviders: readonly AgentProvider[] = [
 export const terminalProviders: readonly TerminalProvider[] = [
   "terminal",
   "warp",
+  "iterm2",
 ];
 
 const integrationIds: readonly IntegrationId[] = [
   "git",
   "vscode",
   "warp",
+  "iterm2",
   "codex",
   "openCode",
   "hermes",
@@ -4245,6 +4255,7 @@ function normalizeAgentSessionDetail(value: unknown): AgentSessionDetail {
     "provider",
     "task",
     "modelSelection",
+    "tokenUsage",
     "events",
     "eventsTruncated",
   ]);
@@ -4259,6 +4270,14 @@ function normalizeAgentSessionDetail(value: unknown): AgentSessionDetail {
     "agentSessionDetail.modelSelection",
     ["authority", "model", "reasoningEffort"],
   );
+  const tokenUsage = raw.tokenUsage === undefined
+    ? undefined
+    : exactRecord(raw.tokenUsage, "agentSessionDetail.tokenUsage", [
+        "inputTokens",
+        "cachedInputTokens",
+        "outputTokens",
+        "totalTokens",
+      ]);
   return {
     schemaVersion: 1,
     sessionId: uuidField(raw.sessionId, "agentSessionDetail.sessionId"),
@@ -4286,8 +4305,30 @@ function normalizeAgentSessionDetail(value: unknown): AgentSessionDetail {
               model.reasoningEffort,
               "agentSessionDetail.modelSelection.reasoningEffort",
             ),
-          }),
+      }),
     },
+    ...(tokenUsage === undefined
+      ? {}
+      : {
+          tokenUsage: {
+            inputTokens: integerField(
+              tokenUsage.inputTokens,
+              "agentSessionDetail.tokenUsage.inputTokens",
+            ),
+            cachedInputTokens: integerField(
+              tokenUsage.cachedInputTokens,
+              "agentSessionDetail.tokenUsage.cachedInputTokens",
+            ),
+            outputTokens: integerField(
+              tokenUsage.outputTokens,
+              "agentSessionDetail.tokenUsage.outputTokens",
+            ),
+            totalTokens: integerField(
+              tokenUsage.totalTokens,
+              "agentSessionDetail.tokenUsage.totalTokens",
+            ),
+          },
+        }),
     events: raw.events.map((value, index) => {
       const path = `agentSessionDetail.events[${index}]`;
       const event = exactRecord(value, path, [
@@ -4635,6 +4676,7 @@ function normalizeIntegration(
           "worktreeMaterialization",
           "vscodeLaunch",
           "warpLaunch",
+          "iterm2Launch",
           "codexLaunch",
           "openCodeLaunch",
           "hermesLaunch",

@@ -106,7 +106,7 @@ impl ExecutableProbe {
         let capability = match self.id {
             IntegrationId::Git => IntegrationCapability::WorktreeMaterialization,
             IntegrationId::Vscode => IntegrationCapability::WorkspaceLaunch,
-            IntegrationId::Warp => IntegrationCapability::TerminalSession,
+            IntegrationId::Warp | IntegrationId::Iterm2 => IntegrationCapability::TerminalSession,
             IntegrationId::Codex | IntegrationId::OpenCode | IntegrationId::Hermes => {
                 IntegrationCapability::AgentSession
             }
@@ -146,6 +146,7 @@ pub struct HostIntegrationSignals {
     openproject_url_configured: bool,
     openproject_token_configured: bool,
     warp_app_available: bool,
+    iterm2_app_available: bool,
 }
 
 impl HostIntegrationSignals {
@@ -159,6 +160,7 @@ impl HostIntegrationSignals {
             openproject_url_configured: false,
             openproject_token_configured: false,
             warp_app_available: false,
+            iterm2_app_available: false,
         }
     }
 
@@ -170,6 +172,11 @@ impl HostIntegrationSignals {
 
     pub const fn with_warp_app(mut self, available: bool) -> Self {
         self.warp_app_available = available;
+        self
+    }
+
+    pub const fn with_iterm2_app(mut self, available: bool) -> Self {
+        self.iterm2_app_available = available;
         self
     }
 
@@ -190,6 +197,7 @@ impl HostIntegrationSignals {
             openproject_url_configured: env_value_is_present(WTS_OPENPROJECT_URL_ENV),
             openproject_token_configured: env_value_is_present(WTS_OPENPROJECT_TOKEN_ENV),
             warp_app_available: warp_app_is_installed(),
+            iterm2_app_available: iterm2_app_is_installed(),
         }
     }
 
@@ -218,8 +226,21 @@ fn warp_app_is_installed() -> bool {
             .is_some_and(|home| home.join("Applications/Warp.app").is_dir())
 }
 
+#[cfg(target_os = "macos")]
+fn iterm2_app_is_installed() -> bool {
+    Path::new("/Applications/iTerm.app").is_dir()
+        || std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .is_some_and(|home| home.join("Applications/iTerm.app").is_dir())
+}
+
 #[cfg(not(target_os = "macos"))]
 const fn warp_app_is_installed() -> bool {
+    false
+}
+
+#[cfg(not(target_os = "macos"))]
+const fn iterm2_app_is_installed() -> bool {
     false
 }
 
@@ -695,6 +716,7 @@ where
             .map(|probe| self.detect_executable(*probe, checked_at_unix_ms))
             .collect::<Vec<_>>();
         integrations.push(self.detect_warp(checked_at_unix_ms));
+        integrations.push(self.detect_iterm2(checked_at_unix_ms));
         integrations.push(self.detect_jira(checked_at_unix_ms));
         integrations.push(self.detect_openproject(checked_at_unix_ms));
         let browser_journey_readiness = self.detect_browser_journey();
@@ -746,6 +768,49 @@ where
                 Vec::new()
             } else {
                 vec![BlockingCapability::WarpLaunch]
+            },
+        }
+    }
+
+    fn detect_iterm2(&self, checked_at_unix_ms: u64) -> IntegrationSnapshot {
+        let available = self.host_signals.iterm2_app_available;
+        IntegrationSnapshot {
+            id: IntegrationId::Iterm2,
+            category: IntegrationCategory::Terminal,
+            status: if available {
+                IntegrationStatus::Ready
+            } else {
+                IntegrationStatus::NotFound
+            },
+            installation: if available {
+                InstallationState::Detected
+            } else {
+                InstallationState::Missing
+            },
+            setup: if available {
+                SetupState::NotRequired
+            } else {
+                SetupState::NeedsDependency
+            },
+            runtime: RuntimeState::Idle,
+            wts_support: WtsSupport::Available,
+            verification_kind: VerificationKind::ConfigurationSignal,
+            capabilities: vec![IntegrationCapability::TerminalSession],
+            version: None,
+            detail: Some(
+                if available {
+                    "iTerm2 is installed and can accept workspace CLI handoffs."
+                } else {
+                    "iTerm.app was not found in an Applications folder."
+                }
+                .to_owned(),
+            ),
+            diagnostic_code: (!available).then_some(DiagnosticCode::ExecutableMissing),
+            last_probe_at: checked_at_unix_ms,
+            blocking_for: if available {
+                Vec::new()
+            } else {
+                vec![BlockingCapability::Iterm2Launch]
             },
         }
     }
@@ -1475,25 +1540,31 @@ mod tests {
             value["integrations"][6]["blockingFor"],
             json!(["warpLaunch"])
         );
-        assert_eq!(value["integrations"][7]["id"], json!("jiraMcp"));
-        assert_eq!(value["integrations"][7]["status"], json!("notConfigured"));
-        assert_eq!(value["integrations"][7]["wtsSupport"], json!("available"));
+        assert_eq!(value["integrations"][7]["id"], json!("iterm2"));
+        assert_eq!(value["integrations"][7]["category"], json!("terminal"));
         assert_eq!(
-            value["integrations"][7]["verificationKind"],
+            value["integrations"][7]["blockingFor"],
+            json!(["iterm2Launch"])
+        );
+        assert_eq!(value["integrations"][8]["id"], json!("jiraMcp"));
+        assert_eq!(value["integrations"][8]["status"], json!("notConfigured"));
+        assert_eq!(value["integrations"][8]["wtsSupport"], json!("available"));
+        assert_eq!(
+            value["integrations"][8]["verificationKind"],
             json!("configurationSignal")
         );
         assert_eq!(
-            value["integrations"][7]["blockingFor"],
+            value["integrations"][8]["blockingFor"],
             json!(["jiraIssueImport"])
         );
-        assert!(value["integrations"][7].get("version").is_none());
-        assert_eq!(value["integrations"][8]["id"], json!("openProject"));
+        assert!(value["integrations"][8].get("version").is_none());
+        assert_eq!(value["integrations"][9]["id"], json!("openProject"));
         assert_eq!(
-            value["integrations"][8]["capabilities"],
+            value["integrations"][9]["capabilities"],
             json!(["openProjectWorkPackageImport"])
         );
         assert_eq!(
-            value["integrations"][8]["blockingFor"],
+            value["integrations"][9]["blockingFor"],
             json!(["openProjectWorkPackageImport"])
         );
         assert!(value["browserJourneyReadiness"].is_object());
@@ -1520,6 +1591,25 @@ mod tests {
             vec![IntegrationCapability::TerminalSession]
         );
         assert!(warp.blocking_for.is_empty());
+    }
+
+    #[test]
+    fn installed_iterm2_is_ready_for_terminal_handoffs_without_a_cli_probe() {
+        let detector = IntegrationDetector::new(
+            FakeResolver::with_all_found(),
+            FakeRunner::with_versions(),
+            HostIntegrationSignals::new(false).with_iterm2_app(true),
+        );
+
+        let snapshot = detector.snapshot_at(0, 73);
+        let iterm2 = snapshot
+            .integrations
+            .iter()
+            .find(|integration| integration.id == IntegrationId::Iterm2)
+            .expect("iTerm2 integration");
+        assert_eq!(iterm2.status, IntegrationStatus::Ready);
+        assert_eq!(iterm2.installation, InstallationState::Detected);
+        assert!(iterm2.blocking_for.is_empty());
     }
 
     #[test]

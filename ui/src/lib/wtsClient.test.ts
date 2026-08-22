@@ -106,6 +106,20 @@ const setupSnapshot: SetupSnapshot = {
       blockingFor: [],
     },
     {
+      id: "iterm2",
+      category: "terminal",
+      status: "ready",
+      installation: "detected",
+      setup: "notRequired",
+      runtime: "idle",
+      wtsSupport: "available",
+      verificationKind: "configurationSignal",
+      capabilities: ["terminalSession"],
+      detail: "iTerm2 is installed and can accept workspace CLI handoffs.",
+      lastProbeAt: 1_721_776_400_000,
+      blockingFor: [],
+    },
+    {
       id: "jiraMcp",
       category: "issueTracker",
       status: "notConfigured",
@@ -1184,6 +1198,12 @@ describe("HTTP workspace client", () => {
       task: "Implement the approved task.",
       modelSelection: {
         authority: "providerDefault",
+      },
+      tokenUsage: {
+        inputTokens: 1200,
+        cachedInputTokens: 300,
+        outputTokens: 200,
+        totalTokens: 1400,
       },
       events: [
         {

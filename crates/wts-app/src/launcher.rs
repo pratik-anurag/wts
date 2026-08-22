@@ -405,6 +405,12 @@ impl ExternalLauncher for ProcessExternalLauncher {
                     )?;
                     warp_cli_command(config_stem)
                 }
+                TerminalProvider::Iterm2 => iterm2_cli_command(
+                    workspace,
+                    provider,
+                    hermes_scope.as_deref(),
+                    &report_helper_directory,
+                )?,
             };
             let status = command.status().map_err(map_launch_error)?;
             if status.success() {
@@ -682,7 +688,7 @@ fn terminal_cli_command(
     hermes_scope: Option<&Path>,
     report_helper_directory: &Path,
 ) -> Result<Command, LaunchFailure> {
-    let mut command = Command::new("osascript");
+    let mut command = Command::new("/usr/bin/osascript");
     command
         .arg("-e")
         .arg(terminal_cli_script(provider))
@@ -695,6 +701,39 @@ fn terminal_cli_command(
         command.arg(hermes_scope.ok_or(LaunchFailure::Rejected)?);
     }
     command
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    Ok(command)
+}
+
+#[cfg(target_os = "macos")]
+fn iterm2_cli_command(
+    workspace: &Path,
+    provider: AgentProvider,
+    hermes_scope: Option<&Path>,
+    report_helper_directory: &Path,
+) -> Result<Command, LaunchFailure> {
+    let workspace = workspace.to_str().ok_or(LaunchFailure::Rejected)?;
+    let launch_command = format!(
+        "cd {} && {}",
+        shell_single_quote(workspace),
+        provider_cli_command(provider, hermes_scope, report_helper_directory)?,
+    );
+    let mut command = Command::new("/usr/bin/osascript");
+    command
+        .arg("-e")
+        .arg(
+            r#"on run argv
+set launchCommand to item 1 of argv
+tell application "iTerm"
+    activate
+    set newWindow to (create window with default profile)
+    tell current session of newWindow to write text launchCommand
+end tell
+end run"#,
+        )
+        .arg(&launch_command)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
@@ -1172,7 +1211,7 @@ mod tests {
             let command = terminal_cli_command(workspace, provider, scope, report_helper_directory)
                 .expect("terminal command");
             let arguments = command.get_args().collect::<Vec<_>>();
-            assert_eq!(command.get_program(), OsStr::new("osascript"));
+            assert_eq!(command.get_program(), OsStr::new("/usr/bin/osascript"));
             assert_eq!(
                 arguments.len(),
                 if provider == AgentProvider::Hermes {
@@ -1197,6 +1236,29 @@ mod tests {
             assert!(!script.contains(report_helper_directory.to_str().expect("UTF-8 helper path")));
             assert!(!script.contains(hermes_scope.to_str().expect("UTF-8 Hermes scope test path")));
         }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn iterm2_launch_uses_a_fixed_script_and_one_shell_quoted_command_argument() {
+        let workspace = Path::new("/tmp/workspace with ' quotes; touch sentinel");
+        let helper = Path::new("/tmp/WTS helper");
+        let command = iterm2_cli_command(workspace, AgentProvider::Codex, None, helper)
+            .expect("iTerm2 command");
+        let arguments = command.get_args().collect::<Vec<_>>();
+
+        assert_eq!(command.get_program(), OsStr::new("/usr/bin/osascript"));
+        assert_eq!(arguments.len(), 3);
+        assert_eq!(arguments[0], OsStr::new("-e"));
+        assert!(
+            arguments[1]
+                .to_string_lossy()
+                .contains("tell application \"iTerm\"")
+        );
+        let launch = arguments[2].to_string_lossy();
+        assert!(launch.starts_with("cd '/tmp/workspace with '\\'' quotes; touch sentinel' && "));
+        assert!(launch.contains("exec codex --sandbox workspace-write"));
+        assert!(!arguments[1].to_string_lossy().contains("touch sentinel"));
     }
 
     #[cfg(target_os = "macos")]

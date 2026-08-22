@@ -61,8 +61,19 @@ pub struct AgentSessionDetail {
     pub provider: AgentProvider,
     pub task: String,
     pub model_selection: AgentModelSelection,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token_usage: Option<AgentTokenUsage>,
     pub events: Vec<AgentSessionEvent>,
     pub events_truncated: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AgentTokenUsage {
+    pub input_tokens: u64,
+    pub cached_input_tokens: u64,
+    pub output_tokens: u64,
+    pub total_tokens: u64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -83,6 +94,7 @@ pub struct AgentProcessEvent {
     pub kind: AgentProcessEventKind,
     pub summary: String,
     pub change_request_proposals: Vec<AgentChangeRequestProposal>,
+    pub token_usage: Option<AgentTokenUsage>,
 }
 
 #[derive(Clone, Default)]
@@ -138,6 +150,7 @@ impl AgentSessionDetailStore {
                         model: None,
                         reasoning_effort: None,
                     },
+                    token_usage: None,
                     events: vec![started],
                     events_truncated: false,
                 },
@@ -153,6 +166,11 @@ impl AgentSessionDetailStore {
         let Some(stored) = details.get_mut(&session_id) else {
             return;
         };
+        if let Some(token_usage) = event.token_usage.clone() {
+            // Codex reports an authoritative total for the completed turn. Replace
+            // the previous observation so replayed events cannot double-count it.
+            stored.detail.token_usage = Some(token_usage);
+        }
         let summary = match event.kind {
             AgentProcessEventKind::NeedsQuestion => "Agent has a question.".to_owned(),
             AgentProcessEventKind::NeedsAccess => "Agent needs access.".to_owned(),
@@ -277,6 +295,7 @@ mod tests {
                 kind: AgentProcessEventKind::AgentUpdate,
                 summary: "I found the failing boundary.".to_owned(),
                 change_request_proposals: Vec::new(),
+                token_usage: None,
             },
         );
 
@@ -303,6 +322,7 @@ mod tests {
                     kind: AgentProcessEventKind::UsesTool,
                     summary: format!("Uses tool {index}.\0private"),
                     change_request_proposals: Vec::new(),
+                    token_usage: None,
                 },
             );
         }
@@ -336,6 +356,7 @@ mod tests {
                 kind: AgentProcessEventKind::NeedsQuestion,
                 summary: "Should I use the private production token?".to_owned(),
                 change_request_proposals: Vec::new(),
+                token_usage: None,
             },
         );
 
@@ -343,5 +364,31 @@ mod tests {
         assert_eq!(detail.events[1].kind, AgentSessionEventKind::NeedsQuestion);
         assert_eq!(detail.events[1].summary, "Agent has a question.");
         assert!(!detail.events[1].summary.contains("token"));
+    }
+
+    #[test]
+    fn detail_keeps_the_latest_provider_reported_token_total() {
+        let store = AgentSessionDetailStore::default();
+        let session = session();
+        store.begin(&session, "Inspect the workspace.");
+        let usage = AgentTokenUsage {
+            input_tokens: 120,
+            cached_input_tokens: 40,
+            output_tokens: 30,
+            total_tokens: 150,
+        };
+        let event = AgentProcessEvent {
+            kind: AgentProcessEventKind::Completed,
+            summary: "Codex completed the task.".to_owned(),
+            change_request_proposals: Vec::new(),
+            token_usage: Some(usage.clone()),
+        };
+        store.record(session.session_id, event.clone());
+        store.record(session.session_id, event);
+
+        assert_eq!(
+            store.get(session.session_id).unwrap().token_usage,
+            Some(usage)
+        );
     }
 }

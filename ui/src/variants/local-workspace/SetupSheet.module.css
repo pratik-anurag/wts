@@ -497,6 +497,13 @@
   text-transform: uppercase;
 }
 
+.terminalNotice {
+  margin: -2px 2px 8px;
+  color: var(--wts-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .integrationList {
   margin: 0;
   padding: 0;
@@ -754,6 +761,31 @@
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
+}
+
+.installLink {
+  align-self: flex-start;
+  min-height: 34px;
+  margin-top: 7px;
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--wts-blue);
+  background: var(--wts-blue-soft);
+  border: 1px solid var(--wts-line-strong);
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.installLink:hover {
+  background: var(--wts-surface-hover);
+}
+
+.installLink:focus-visible {
+  outline: none;
+  box-shadow: var(--wts-focus-ring);
 }
 
 .adapterVerifyButton:hover:not(:disabled) {

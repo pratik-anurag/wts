@@ -1193,12 +1193,9 @@ function preferredAgentProvider(provider: Provider): AgentProvider | null {
 }
 
 function preferredTerminalProvider(
-  integrations?: SetupSnapshot["integrations"],
+  _integrations?: SetupSnapshot["integrations"],
 ): TerminalProvider {
-  const warp = integrations?.find((item) => item.id === "warp");
-  return warp?.installation === "detected" && warp.status !== "error"
-    ? "warp"
-    : "terminal";
+  return "terminal";
 }
 
 function workspaceKey(view: WorkspaceView) {
@@ -8996,8 +8993,9 @@ const cliProviderCommands: Record<AgentProvider, string> = {
 };
 
 const terminalNames: Record<TerminalProvider, string> = {
-  terminal: "Terminal",
+  terminal: "Default Terminal",
   warp: "Warp",
+  iterm2: "iTerm2",
 };
 
 function providerSetupLabel(
@@ -9055,6 +9053,10 @@ function WorkspaceCliPanel({
   const warpAvailable =
     warpIntegration?.installation === "detected" &&
     warpIntegration.status !== "error";
+  const iterm2Integration = integrations?.find((item) => item.id === "iterm2");
+  const iterm2Available =
+    iterm2Integration?.installation === "detected" &&
+    iterm2Integration.status !== "error";
   const preferredTerminal = preferredTerminalProvider(integrations);
   const [terminal, setTerminal] = useState<TerminalProvider>(preferredTerminal);
   const [state, setState] = useState<CliPanelState>("idle");
@@ -9305,12 +9307,14 @@ function WorkspaceCliPanel({
               <b>Open the session in</b>
             </span>
             <div aria-label="Terminal application" role="group">
-              {(["warp", "terminal"] as const).map((item) => (
+              {(["terminal", "iterm2", "warp"] as const).map((item) => (
                 <InfoTooltip
                   key={item}
                   content={
                     item === "warp" && !warpAvailable
                       ? "Warp.app was not detected in Applications"
+                      : item === "iterm2" && !iterm2Available
+                        ? "iTerm.app was not detected in Applications"
                       : pending
                         ? "CLI launch in progress"
                         : undefined
@@ -9318,16 +9322,21 @@ function WorkspaceCliPanel({
                 >
                   <Button
                     aria-pressed={terminal === item}
-                    isDisabled={pending || (item === "warp" && !warpAvailable)}
+                    isDisabled={
+                      pending ||
+                      (item === "warp" && !warpAvailable) ||
+                      (item === "iterm2" && !iterm2Available)
+                    }
                     onPress={() => {
                       setTerminal(item);
                       setMessage("");
                       setState("idle");
                     }}
                   >
-                    {item === "warp" ? "WP" : ">_"}
+                    {item === "warp" ? "WP" : item === "iterm2" ? "IT" : ">_"}
                     <span>{terminalNames[item]}</span>
                     {item === "warp" && warpAvailable && <small>Detected</small>}
+                    {item === "iterm2" && iterm2Available && <small>Detected</small>}
                   </Button>
                 </InfoTooltip>
               ))}
@@ -13225,12 +13234,19 @@ export function LocalWorkspace({
     >
       <AgentSessionsPanel
         client={client}
+        onCreateWorkspace={startNewWorkspace}
         workspaceLabels={Object.fromEntries(
           workspaces.map((workspace) => [
             workspace.id,
             { key: workspace.key, title: workspace.title },
           ]),
         )}
+        workspaceOptions={workspaces.map((workspace) => ({
+          id: workspace.id,
+          key: workspace.key,
+          title: workspace.title,
+          materialized: workspace.lifecycleState === "materialized",
+        }))}
       />
     </main>
   );

@@ -1,6 +1,6 @@
 use crate::{
     AgentProvider, AgentRunResult, GraphIndexResult, GraphWorkspaceStatus,
-    agent_session_details::{AgentProcessEvent, AgentProcessEventKind},
+    agent_session_details::{AgentProcessEvent, AgentProcessEventKind, AgentTokenUsage},
     agent_sessions::{CHANGE_REQUEST_PROPOSAL_PREFIX, parse_agent_change_request_proposals},
     collaboration::{
         CollaborationAdapter, CollaborationAdapterFailure, CollaborationAdapterOutcome,
@@ -739,10 +739,14 @@ fn parse_codex_event(line: &[u8]) -> Option<AgentProcessEvent> {
             AgentProcessEventKind::Thinking,
             "Codex analyzes the task.",
         )),
-        "turn.completed" => Some(managed_event(
-            AgentProcessEventKind::Completed,
-            "Codex completed the task.",
-        )),
+        "turn.completed" => {
+            let mut completed = managed_event(
+                AgentProcessEventKind::Completed,
+                "Codex completed the task.",
+            );
+            completed.token_usage = event.get("usage").and_then(parse_codex_token_usage);
+            Some(completed)
+        }
         "item.started" | "item.completed" => {
             let item = event.get("item")?;
             let item_type = item.get("type").and_then(Value::as_str)?;
@@ -773,6 +777,7 @@ fn parse_codex_event(line: &[u8]) -> Option<AgentProcessEvent> {
                             kind: AgentProcessEventKind::AgentUpdate,
                             summary,
                             change_request_proposals,
+                            token_usage: None,
                         })
                 }
                 "reasoning" => Some(managed_event(
@@ -807,7 +812,28 @@ fn managed_event(kind: AgentProcessEventKind, summary: &str) -> AgentProcessEven
         kind,
         summary: summary.to_owned(),
         change_request_proposals: Vec::new(),
+        token_usage: None,
     }
+}
+
+fn parse_codex_token_usage(value: &Value) -> Option<AgentTokenUsage> {
+    let read = |snake: &str, camel: &str| {
+        value
+            .get(snake)
+            .or_else(|| value.get(camel))
+            .and_then(Value::as_u64)
+    };
+    let input_tokens = read("input_tokens", "inputTokens")?;
+    let cached_input_tokens = read("cached_input_tokens", "cachedInputTokens").unwrap_or(0);
+    let output_tokens = read("output_tokens", "outputTokens")?;
+    let total_tokens = read("total_tokens", "totalTokens")
+        .unwrap_or_else(|| input_tokens.saturating_add(output_tokens));
+    Some(AgentTokenUsage {
+        input_tokens,
+        cached_input_tokens,
+        output_tokens,
+        total_tokens,
+    })
 }
 
 fn bounded_agent_message(value: &str) -> Option<String> {
@@ -1045,6 +1071,41 @@ printf '%s\n' '{"type":"turn.completed","usage":{"secret":"private usage"}}'
         assert_eq!(access.summary, "Agent needs access.");
         assert!(!question.summary.contains("private"));
         assert!(!access.summary.contains("secret"));
+    }
+
+    #[test]
+    fn codex_completion_keeps_only_normalized_token_counters() {
+        let event = parse_codex_event(
+            serde_json::json!({
+                "type": "turn.completed",
+                "usage": {
+                    "input_tokens": 1200,
+                    "cached_input_tokens": 300,
+                    "output_tokens": 200,
+                    "total_tokens": 1400,
+                    "secret": "never expose this"
+                }
+            })
+            .to_string()
+            .as_bytes(),
+        )
+        .expect("completion event");
+
+        assert_eq!(
+            event.token_usage,
+            Some(AgentTokenUsage {
+                input_tokens: 1200,
+                cached_input_tokens: 300,
+                output_tokens: 200,
+                total_tokens: 1400,
+            })
+        );
+        assert!(!event.summary.contains("secret"));
+
+        let private_only =
+            parse_codex_event(br#"{"type":"turn.completed","usage":{"secret":"private"}}"#)
+                .expect("completion event");
+        assert_eq!(private_only.token_usage, None);
     }
 
     #[test]

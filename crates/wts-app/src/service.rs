@@ -7753,6 +7753,7 @@ fn terminal_provider_log_label(terminal: TerminalProvider) -> &'static str {
     match terminal {
         TerminalProvider::Terminal => "terminal",
         TerminalProvider::Warp => "warp",
+        TerminalProvider::Iterm2 => "iterm2",
     }
 }
 

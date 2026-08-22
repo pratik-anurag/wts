@@ -180,6 +180,69 @@ afterEach(() => {
 });
 
 describe("SetupSheet", () => {
+  it("offers official install pages for missing tools and explains terminal choices", async () => {
+    const user = userEvent.setup();
+    const terminalSnapshot: SetupSnapshot = {
+      ...snapshot,
+      integrations: [
+        ...snapshot.integrations,
+        {
+          id: "warp",
+          category: "terminal",
+          status: "notFound",
+          installation: "missing",
+          setup: "needsDependency",
+          runtime: "idle",
+          wtsSupport: "available",
+          verificationKind: "configurationSignal",
+          capabilities: ["terminalSession"],
+          lastProbeAt: snapshot.checkedAtUnixMs,
+          blockingFor: ["warpLaunch"],
+        },
+        {
+          id: "iterm2",
+          category: "terminal",
+          status: "notFound",
+          installation: "missing",
+          setup: "needsDependency",
+          runtime: "idle",
+          wtsSupport: "available",
+          verificationKind: "configurationSignal",
+          capabilities: ["terminalSession"],
+          lastProbeAt: snapshot.checkedAtUnixMs,
+          blockingFor: ["iterm2Launch"],
+        },
+      ],
+    };
+    render(
+      <SetupSheet
+        loading={false}
+        onOpenChange={vi.fn()}
+        onRefresh={vi.fn()}
+        open
+        repositories={repositories}
+        snapshot={terminalSnapshot}
+      />,
+    );
+
+    await user.click(screen.getByRole("tab", { name: /^Integrations/ }));
+    expect(
+      screen.getByText(/Default Terminal uses the macOS Terminal app/),
+    ).toBeVisible();
+    expect(screen.getByRole("link", { name: "Get Warp" })).toHaveAttribute(
+      "href",
+      "https://www.warp.dev/download",
+    );
+    expect(screen.getByRole("link", { name: "Get iTerm2" })).toHaveAttribute(
+      "href",
+      "https://iterm2.com/downloads.html",
+    );
+    expect(screen.getByRole("link", { name: "Get OpenCode" })).toHaveAttribute(
+      "href",
+      "https://opencode.ai/docs",
+    );
+  });
+
   it("changes and persists the application color theme from General preferences", async () => {
     const user = userEvent.setup();
     localStorage.removeItem(THEME_STORAGE_KEY);

@@ -99,7 +99,7 @@ describe("OpenWorkspaceLauncher", () => {
     expect(onOpenCli).toHaveBeenCalledWith("codex", "terminal");
     expect(
       await within(dialog).findByRole("status"),
-    ).toHaveTextContent("Codex opened in Terminal.");
+    ).toHaveTextContent("Codex opened in Default Terminal.");
   });
 
   it("keeps terminal choice secondary and sends it with alternate agent launches", async () => {
@@ -130,7 +130,7 @@ describe("OpenWorkspaceLauncher", () => {
     await user.click(screen.getByRole("button", { name: "Open workspace" }));
     const dialog = screen.getByRole("dialog", { name: "Open workspace" });
     await user.click(
-      within(dialog).getByRole("button", { name: "Terminal" }),
+      within(dialog).getByRole("button", { name: "Default Terminal" }),
     );
     await user.click(within(dialog).getByRole("button", { name: "Warp" }));
     await user.click(
@@ -138,6 +138,35 @@ describe("OpenWorkspaceLauncher", () => {
     );
 
     expect(onOpenCli).toHaveBeenCalledWith("hermes", "warp");
+  });
+
+  it("offers iTerm2 when the application is detected", async () => {
+    const user = userEvent.setup();
+    const { onOpenCli } = renderLauncher({
+      onOpenCli: vi.fn().mockResolvedValue(
+        launchResult({ provider: "openCode", terminal: "iterm2" }),
+      ),
+      integrations: [{
+        id: "iterm2",
+        category: "terminal",
+        status: "ready",
+        installation: "detected",
+        setup: "notRequired",
+        runtime: "idle",
+        wtsSupport: "available",
+        verificationKind: "configurationSignal",
+        capabilities: ["terminalSession"],
+        lastProbeAt: 1,
+        blockingFor: [],
+      }],
+    });
+
+    await user.click(screen.getByRole("button", { name: "Open workspace" }));
+    const dialog = screen.getByRole("dialog", { name: "Open workspace" });
+    await user.click(within(dialog).getByRole("button", { name: "iTerm2" }));
+    await user.click(within(dialog).getByRole("button", { name: "Open OpenCode" }));
+
+    expect(onOpenCli).toHaveBeenCalledWith("openCode", "iterm2");
   });
 
   it("copies the working path and announces only after clipboard acceptance", async () => {

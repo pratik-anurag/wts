@@ -68,6 +68,7 @@ interface IntegrationDefinition {
   mark: string;
   description: string;
   capability: string;
+  installUrl?: string;
 }
 
 const integrationDefinitions: Record<
@@ -80,6 +81,7 @@ const integrationDefinitions: Record<
     mark: "GT",
     description: "Local version control engine",
     capability: "Inspect repositories and create isolated worktrees",
+    installUrl: "https://git-scm.com/downloads",
   },
   jiraMcp: {
     id: "jiraMcp",
@@ -108,6 +110,7 @@ const integrationDefinitions: Record<
     mark: "CX",
     description: "Coding agent provider",
     capability: "Open the interactive CLI at the generated workspace root",
+    installUrl: "https://developers.openai.com/codex/cli",
   },
   openCode: {
     id: "openCode",
@@ -115,6 +118,7 @@ const integrationDefinitions: Record<
     mark: "OC",
     description: "Terminal-native agent provider",
     capability: "Open the native terminal UI in workspace context",
+    installUrl: "https://opencode.ai/docs",
   },
   hermes: {
     id: "hermes",
@@ -129,6 +133,7 @@ const integrationDefinitions: Record<
     mark: "VS",
     description: "Workspace editor",
     capability: "Open the generated multi-root workspace",
+    installUrl: "https://code.visualstudio.com/download",
   },
   warp: {
     id: "warp",
@@ -136,6 +141,15 @@ const integrationDefinitions: Record<
     mark: "WP",
     description: "Workspace terminal",
     capability: "Open provider CLIs at the validated workspace root",
+    installUrl: "https://www.warp.dev/download",
+  },
+  iterm2: {
+    id: "iterm2",
+    label: "iTerm2",
+    mark: "IT",
+    description: "Optional workspace terminal",
+    capability: "Open provider CLIs at the validated workspace root",
+    installUrl: "https://iterm2.com/downloads.html",
   },
 };
 
@@ -146,7 +160,7 @@ const integrationGroups = [
   },
   {
     label: "Terminals",
-    ids: ["warp"] satisfies SetupIntegrationId[],
+    ids: ["warp", "iterm2"] satisfies SetupIntegrationId[],
   },
   {
     label: "Issue context",
@@ -162,6 +176,7 @@ const blockingLabels: Record<SetupBlockingCapability, string> = {
   worktreeMaterialization: "Worktree creation is blocked",
   vscodeLaunch: "Opening the workspace in VS Code is unavailable",
   warpLaunch: "Opening a workspace CLI in Warp is unavailable",
+  iterm2Launch: "Opening a workspace CLI in iTerm2 is unavailable",
   codexLaunch: "Launching a Codex session is unavailable",
   openCodeLaunch: "Launching an OpenCode session is unavailable",
   hermesLaunch: "Launching a Hermes session is unavailable",
@@ -595,6 +610,19 @@ function IntegrationRow({
                   : "Verify connection"}
             </button>
           )}
+        {definition.installUrl &&
+          (integration?.installation === "missing" ||
+            integration?.installation === "unsupported" ||
+            integration?.setup === "needsDependency") && (
+            <a
+              className={styles.installLink}
+              href={definition.installUrl}
+              rel="noreferrer"
+              target="_blank"
+            >
+              Get {definition.label}
+            </a>
+          )}
         {adapterMessage && (
           <small
             className={styles.adapterCheckMessage}
@@ -783,6 +811,12 @@ function IntegrationsPanel({
       {integrationGroups.map((group) => (
         <section className={styles.integrationGroup} key={group.label}>
           <h4>{group.label}</h4>
+          {group.label === "Terminals" && (
+            <p className={styles.terminalNotice}>
+              Default Terminal uses the macOS Terminal app and needs no extra installation.
+              Warp and iTerm2 are optional.
+            </p>
+          )}
           <ul className={styles.integrationList}>
             {group.label === "Workspace core" && client && (
               <GitlabIntegrationCard

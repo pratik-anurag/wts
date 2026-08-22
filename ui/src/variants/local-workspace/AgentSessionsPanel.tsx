@@ -12,6 +12,7 @@ import type {
   ActivityWatchStatus,
   AgentProvider,
   AgentSession,
+  AgentSessionDetail,
   AgentSessionStatus,
   JiraActiveIssueList,
   ObservedAgentSession,
@@ -49,6 +50,7 @@ import styles from "./AgentSessionsPanel.module.css";
 
 const REFRESH_INTERVAL_MS = 5_000;
 const MAX_AUTOMATIC_REFRESHES = 120;
+const MAX_PARALLEL_WORKSPACES = 4;
 
 type ReadState = "loading" | "ready" | "error";
 type ReviewState = "idle" | ReadState;
@@ -128,6 +130,10 @@ function compactDuration(seconds: number) {
   return `${hours}h ${minutes % 60}m`;
 }
 
+function tokenCountLabel(value: number) {
+  return new Intl.NumberFormat(undefined, { notation: "compact" }).format(value);
+}
+
 function activityRangeLabel(startedAtUnixMs: number, endedAtUnixMs: number) {
   const format = (value: number) =>
     new Date(value).toLocaleTimeString([], {
@@ -187,9 +193,18 @@ function todayRange(now = new Date()) {
 export function AgentSessionsPanel({
   client,
   workspaceLabels,
+  workspaceOptions = [],
+  onCreateWorkspace,
 }: {
   client: WorkspaceClient;
   workspaceLabels: Record<string, { key: string; title: string }>;
+  workspaceOptions?: Array<{
+    id: string;
+    key: string;
+    title: string;
+    materialized: boolean;
+  }>;
+  onCreateWorkspace?: () => void;
 }) {
   const [cachedReview] = useState(() =>
     loadActivityWatchReviewSnapshot(),
@@ -201,6 +216,9 @@ export function AgentSessionsPanel({
     null,
   );
   const [sessions, setSessions] = useState<AgentSession[]>([]);
+  const [sessionDetails, setSessionDetails] = useState<
+    Record<string, AgentSessionDetail>
+  >({});
   const [observedSessions, setObservedSessions] = useState<
     ObservedAgentSession[]
   >([]);
@@ -239,6 +257,12 @@ export function AgentSessionsPanel({
   const [showIgnoredApplications, setShowIgnoredApplications] = useState(false);
   const [refreshCount, setRefreshCount] = useState(0);
   const [now, setNow] = useState(() => Date.now());
+  const [parallelSelection, setParallelSelection] = useState<string[]>([]);
+  const [parallelTask, setParallelTask] = useState("");
+  const [parallelState, setParallelState] = useState<
+    "idle" | "starting" | "started" | "error"
+  >("idle");
+  const [parallelMessage, setParallelMessage] = useState("");
   const [reviewSchedule, setReviewSchedule] = useState(loadTimeReviewSchedule);
   const [notificationState, setNotificationState] =
     useState<DesktopNotificationState>(desktopNotificationState);
@@ -252,6 +276,21 @@ export function AgentSessionsPanel({
         if (generation !== generationRef.current) return;
         setSessions(result.sessions);
         setObservedSessions(result.observedSessions ?? []);
+        const detailResults = await Promise.allSettled(
+          result.sessions.map((session) =>
+            client.getAgentSessionDetail(session.sessionId),
+          ),
+        );
+        if (generation !== generationRef.current) return;
+        setSessionDetails(
+          Object.fromEntries(
+            detailResults.flatMap((detail) =>
+              detail.status === "fulfilled"
+                ? [[detail.value.sessionId, detail.value] as const]
+                : [],
+            ),
+          ),
+        );
         setSessionState("ready");
         setSessionError("");
         setNow(Date.now());
@@ -604,6 +643,68 @@ export function AgentSessionsPanel({
       ),
     [sessions],
   );
+  const activeWorkspaceIds = useMemo(
+    () =>
+      new Set(
+        sessions
+          .filter((session) =>
+            ["launching", "handoffAccepted", "running", "stopping"].includes(
+              session.status,
+            ),
+          )
+          .map((session) => session.workspaceId),
+      ),
+    [sessions],
+  );
+  const worktreeUsage = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const session of sessions) {
+      const usage = sessionDetails[session.sessionId]?.tokenUsage;
+      if (!usage) continue;
+      totals.set(
+        session.workspaceId,
+        (totals.get(session.workspaceId) ?? 0) + usage.totalTokens,
+      );
+    }
+    return [...totals.entries()]
+      .map(([workspaceId, totalTokens]) => ({
+        workspaceId,
+        totalTokens,
+        label: workspaceLabels[workspaceId]?.key ?? "Unassigned workspace",
+      }))
+      .sort((left, right) => right.totalTokens - left.totalTokens);
+  }, [sessionDetails, sessions, workspaceLabels]);
+  const materializedWorkspaceOptions = workspaceOptions.filter(
+    (workspace) => workspace.materialized,
+  );
+  const startParallelWork = useCallback(async () => {
+    const task = parallelTask.trim();
+    if (parallelSelection.length < 2 || !task) return;
+    setParallelState("starting");
+    setParallelMessage("");
+    const results = await Promise.allSettled(
+      parallelSelection.map((workspaceId) =>
+        client.launchAgentSession(workspaceId, {
+          provider: "codex",
+          category: "implementation",
+          prompt: task,
+        }),
+      ),
+    );
+    const started = results.filter((result) => result.status === "fulfilled").length;
+    const failed = results.length - started;
+    setParallelState(failed === 0 ? "started" : "error");
+    setParallelMessage(
+      failed === 0
+        ? `Codex started in ${started} isolated workspaces.`
+        : `Codex started in ${started} workspaces. ${failed} could not start.`,
+    );
+    if (started > 0) {
+      setParallelSelection([]);
+      setParallelTask("");
+    }
+    await refreshSessions(false);
+  }, [client, parallelSelection, parallelTask, refreshSessions]);
   const openRecordCount = sessions.filter(
     (session) => session.status === "running",
   ).length + observedSessions.filter((session) => session.status === "working").length;
@@ -1096,6 +1197,122 @@ export function AgentSessionsPanel({
         </Tabs.Content>
 
         <Tabs.Content className={styles.tabPanel} value="agent-activity">
+          <section
+            aria-labelledby="parallel-work-title"
+            className={styles.parallelWork}
+            data-ui="activity.parallel-work"
+            data-ui-label="Parallel work launcher"
+          >
+            <header>
+              <div>
+                <small>ISOLATED CODEX WORK</small>
+                <h3 id="parallel-work-title">Start parallel work</h3>
+                <p>
+                  Select two to four materialized workspaces. WTS starts one
+                  Codex process in each isolated workspace root.
+                </p>
+              </div>
+              {onCreateWorkspace && (
+                <button onClick={onCreateWorkspace} type="button">
+                  New branch workspace
+                </button>
+              )}
+            </header>
+            {materializedWorkspaceOptions.length < 2 ? (
+              <div className={styles.parallelEmpty}>
+                Create at least two branch workspaces before you start parallel work.
+              </div>
+            ) : (
+              <>
+                <fieldset className={styles.workspacePicker}>
+                  <legend>Materialized workspaces</legend>
+                  {materializedWorkspaceOptions.map((workspace) => {
+                    const selected = parallelSelection.includes(workspace.id);
+                    const active = activeWorkspaceIds.has(workspace.id);
+                    const selectionFull =
+                      !selected && parallelSelection.length >= MAX_PARALLEL_WORKSPACES;
+                    return (
+                      <label key={workspace.id}>
+                        <input
+                          aria-label={`${workspace.key}: ${workspace.title}`}
+                          checked={selected}
+                          disabled={active || selectionFull || parallelState === "starting"}
+                          onChange={(event) => {
+                            setParallelState("idle");
+                            setParallelMessage("");
+                            setParallelSelection((current) =>
+                              event.target.checked
+                                ? [...current, workspace.id]
+                                : current.filter((id) => id !== workspace.id),
+                            );
+                          }}
+                          type="checkbox"
+                        />
+                        <span>
+                          <strong>{workspace.key}</strong>
+                          <small>{active ? "Agent already active" : workspace.title}</small>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </fieldset>
+                <label className={styles.parallelTask}>
+                  <span>Task for every selected workspace</span>
+                  <textarea
+                    disabled={parallelState === "starting"}
+                    maxLength={16_000}
+                    onChange={(event) => {
+                      setParallelTask(event.target.value);
+                      setParallelState("idle");
+                      setParallelMessage("");
+                    }}
+                    placeholder="Implement the requested branch change, run relevant checks, and summarize the result. Do not commit or push."
+                    rows={3}
+                    value={parallelTask}
+                  />
+                </label>
+                <div className={styles.parallelActions}>
+                  <span aria-live="polite" data-error={parallelState === "error" || undefined}>
+                    {parallelMessage || `${parallelSelection.length} of ${MAX_PARALLEL_WORKSPACES} selected`}
+                  </span>
+                  <button
+                    disabled={
+                      parallelSelection.length < 2 ||
+                      !parallelTask.trim() ||
+                      parallelState === "starting"
+                    }
+                    onClick={() => void startParallelWork()}
+                    type="button"
+                  >
+                    {parallelState === "starting"
+                      ? "WTS starts agents…"
+                      : `Start ${parallelSelection.length || "selected"} agents`}
+                  </button>
+                </div>
+              </>
+            )}
+          </section>
+
+          {worktreeUsage.length > 0 && (
+            <section className={styles.usageRollup} aria-labelledby="worktree-usage-title">
+              <header>
+                <div>
+                  <small>PROVIDER-REPORTED USAGE</small>
+                <h3 id="worktree-usage-title">Tokens by managed workspace</h3>
+                </div>
+                <span>{tokenCountLabel(worktreeUsage.reduce((total, item) => total + item.totalTokens, 0))} total</span>
+              </header>
+              <ul>
+                {worktreeUsage.map((usage) => (
+                  <li key={usage.workspaceId}>
+                    <strong>{usage.label}</strong>
+                    <span>{tokenCountLabel(usage.totalTokens)} tokens</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           <div
             className={styles.listHeader}
             data-ui="activity.agent-sessions-header"
@@ -1169,6 +1386,10 @@ export function AgentSessionsPanel({
                     {new Date(session.lastEventAtUnixMs).toLocaleString()}
                   </time>
                 </div>
+                <div className={styles.usageIdentity}>
+                  <strong>Usage unavailable</strong>
+                  <span>Editor session</span>
+                </div>
                 <span className={styles.status} data-status={session.status === "working" ? "running" : session.status}>
                   {session.status === "working" ? "Working in VS Code" : "Open in VS Code"}
                 </span>
@@ -1178,6 +1399,7 @@ export function AgentSessionsPanel({
           {orderedSessions.map((session) => {
             const failure = failureLabel(session.failure);
             const workspace = workspaceLabels[session.workspaceId];
+            const usage = sessionDetails[session.sessionId]?.tokenUsage;
             return (
               <li key={session.sessionId}>
                 <span
@@ -1188,7 +1410,11 @@ export function AgentSessionsPanel({
                 <div className={styles.sessionIdentity}>
                   <strong>{providerLabels[session.provider]}</strong>
                   <span>
-                    {session.terminal === "warp" ? "Warp" : "Terminal"} ·{" "}
+                    {session.terminal === "warp"
+                      ? "Warp"
+                      : session.terminal === "iterm2"
+                        ? "iTerm2"
+                        : "Default Terminal"} ·{" "}
                     {categoryLabel(session.category)}
                   </span>
                 </div>
@@ -1204,6 +1430,16 @@ export function AgentSessionsPanel({
                   <time dateTime={new Date(session.startedAtUnixMs).toISOString()}>
                     {new Date(session.startedAtUnixMs).toLocaleString()}
                   </time>
+                </div>
+                <div className={styles.usageIdentity}>
+                  <strong>
+                    {usage ? `${tokenCountLabel(usage.totalTokens)} tokens` : "Usage not reported"}
+                  </strong>
+                  <span>
+                    {usage
+                      ? `${tokenCountLabel(usage.inputTokens)} in · ${tokenCountLabel(usage.outputTokens)} out${usage.cachedInputTokens ? ` · ${tokenCountLabel(usage.cachedInputTokens)} cached` : ""}`
+                      : "Provider telemetry"}
+                  </span>
                 </div>
                 <span
                   className={styles.status}
