@@ -18,6 +18,7 @@
     "test:e2e:selfhost": "npm --prefix ui run test:e2e:selfhost",
     "test:browser-driver": "node --test scripts/wts-browser-driver.test.mjs",
     "test:browser-driver:install": "playwright install chromium",
+    "tauri": "tauri",
     "desktop:dev": "bash scripts/prepare-desktop-dev.sh && tauri dev",
     "test:desktop-dev-helper": "node --test scripts/prepare-desktop-dev.test.mjs",
     "build:macos:qa": "bash scripts/build-macos-app.sh",

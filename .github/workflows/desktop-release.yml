@@ -65,15 +65,17 @@ jobs:
         env:
           APPLE_SIGNING_IDENTITY: "-"
         with:
-          args: --target aarch64-apple-darwin --bundles app,dmg
+          args: --target aarch64-apple-darwin --bundles app
 
       - name: Create and verify checksum
         run: |
           desktop_version="$(node -p "require('./src-tauri/tauri.conf.json').version")"
           bundle_root="target/$MACOS_TARGET/release/bundle"
-          tar -czf "$bundle_root/dmg/WTS_${desktop_version}_aarch64.app.tar.gz" -C "$bundle_root/macos" WTS.app
-          cd "$bundle_root/dmg"
-          shasum -a 256 ./*.dmg ./*.app.tar.gz > WTS-macOS-arm64.sha256
+          release_assets="$bundle_root/release-assets"
+          mkdir -p "$release_assets"
+          tar -czf "$release_assets/WTS_${desktop_version}_aarch64.app.tar.gz" -C "$bundle_root/macos" WTS.app
+          cd "$release_assets"
+          shasum -a 256 ./*.app.tar.gz > WTS-macOS-arm64.sha256
           shasum -a 256 -c WTS-macOS-arm64.sha256
 
       - name: Upload QA artifact
@@ -81,9 +83,8 @@ jobs:
         with:
           name: WTS-macOS-arm64-${{ github.sha }}
           path: |
-            target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
-            target/aarch64-apple-darwin/release/bundle/dmg/*.app.tar.gz
-            target/aarch64-apple-darwin/release/bundle/dmg/*.sha256
+            target/aarch64-apple-darwin/release/bundle/release-assets/*.app.tar.gz
+            target/aarch64-apple-darwin/release/bundle/release-assets/*.sha256
           if-no-files-found: error
           retention-days: 14
 
@@ -180,24 +181,25 @@ jobs:
           generateReleaseNotes: true
           releaseDraft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
-          uploadUpdaterJson: false
+          includeUpdaterJson: false
           args: --target aarch64-apple-darwin --bundles app,dmg
 
-      - name: Build and publish ad-hoc preview
+      - name: Build ad-hoc preview
         if: steps.signing.outputs.mode == 'ad-hoc'
-        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_SIGNING_IDENTITY: "-"
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: WTS ${{ github.ref_name }} preview
-          releaseBody: Preview only. This Apple Silicon app has an ad-hoc signature. Apple did not notarize it.
-          generateReleaseNotes: true
-          releaseDraft: true
-          prerelease: true
-          uploadUpdaterJson: false
-          args: --target aarch64-apple-darwin --bundles app,dmg
+        run: npm run tauri -- build --target aarch64-apple-darwin --bundles app
+
+      - name: Create ad-hoc preview release
+        if: steps.signing.outputs.mode == 'ad-hoc'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --draft \
+            --prerelease \
+            --title "WTS $GITHUB_REF_NAME preview" \
+            --notes "Preview only. This Apple Silicon app has an ad-hoc signature. Apple did not notarize it."
 
       - name: Publish verified checksum
         env:
@@ -209,12 +211,19 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$bundle_root/macos/WTS.app"
           if test "$WTS_RELEASE_SIGNING_MODE" = "developer-id"; then
             xcrun stapler validate "$bundle_root/macos/WTS.app"
+            release_assets="$bundle_root/dmg"
           else
             echo "Skip notarization validation for the ad-hoc preview."
+            release_assets="$bundle_root/release-assets"
+            mkdir -p "$release_assets"
           fi
-          tar -czf "$bundle_root/dmg/WTS_${desktop_version}_aarch64.app.tar.gz" -C "$bundle_root/macos" WTS.app
-          cd "$bundle_root/dmg"
-          shasum -a 256 ./*.dmg ./*.app.tar.gz > WTS-macOS-arm64.sha256
+          tar -czf "$release_assets/WTS_${desktop_version}_aarch64.app.tar.gz" -C "$bundle_root/macos" WTS.app
+          cd "$release_assets"
+          if test "$WTS_RELEASE_SIGNING_MODE" = "developer-id"; then
+            shasum -a 256 ./*.dmg ./*.app.tar.gz > WTS-macOS-arm64.sha256
+          else
+            shasum -a 256 ./*.app.tar.gz > WTS-macOS-arm64.sha256
+          fi
           shasum -a 256 -c WTS-macOS-arm64.sha256
           gh release upload "$GITHUB_REF_NAME" ./*.app.tar.gz WTS-macOS-arm64.sha256 --clobber
           gh release edit "$GITHUB_REF_NAME" --draft=false

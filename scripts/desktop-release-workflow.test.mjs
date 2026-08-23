@@ -19,13 +19,20 @@ test("tagged desktop releases use an ad-hoc preview when Apple credentials are a
   assert.match(signing.run, /mode=ad-hoc/);
   assert.match(signing.run, /mode=developer-id/);
 
-  const preview = step("Build and publish ad-hoc preview");
+  const preview = step("Build ad-hoc preview");
   assert.equal(preview.if, "steps.signing.outputs.mode == 'ad-hoc'");
   assert.equal(preview.env.APPLE_SIGNING_IDENTITY, "-");
-  assert.equal(preview.with.prerelease, true);
+  assert.match(preview.run, /--bundles app$/);
+
+  const previewRelease = step("Create ad-hoc preview release");
+  assert.equal(previewRelease.if, "steps.signing.outputs.mode == 'ad-hoc'");
+  assert.match(previewRelease.run, /gh release create/);
+  assert.match(previewRelease.run, /--prerelease/);
 
   const notarized = step("Build and publish notarized desktop release");
   assert.equal(notarized.if, "steps.signing.outputs.mode == 'developer-id'");
+  assert.equal(notarized.with.includeUpdaterJson, false);
+  assert.equal("uploadUpdaterJson" in notarized.with, false);
 
   const checksum = step("Publish verified checksum");
   assert.match(checksum.run, /WTS_RELEASE_SIGNING_MODE.*developer-id/);
@@ -37,4 +44,9 @@ test("tagged desktop releases use an ad-hoc preview when Apple credentials are a
     );
     assert.equal(rust.with.toolchain, "1.98.0");
   }
+
+  const packageManifest = JSON.parse(
+    readFileSync(resolve(projectRoot, "package.json"), "utf8"),
+  );
+  assert.equal(packageManifest.scripts.tauri, "tauri");
 });
