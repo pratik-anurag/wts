@@ -3,12 +3,22 @@ package main
 import (
 	"archive/tar"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (function roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return function(request)
+}
 
 func TestVerifyChecksum(t *testing.T) {
 	directory := t.TempDir()
@@ -76,5 +86,44 @@ func TestValidateApplication(t *testing.T) {
 	}
 	if err := validateApplication(application); err != nil {
 		t.Fatalf("validateApplication() error = %v", err)
+	}
+}
+
+func TestLoadReleaseFallsBackToNewestPreview(t *testing.T) {
+	requests := make([]string, 0, 2)
+	client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requests = append(requests, request.URL.RequestURI())
+		response := &http.Response{Header: make(http.Header), Request: request}
+		switch request.URL.RequestURI() {
+		case "/repos/pratik-anurag/wts/releases/latest":
+			response.StatusCode = http.StatusNotFound
+			response.Body = io.NopCloser(strings.NewReader("not found"))
+		case "/repos/pratik-anurag/wts/releases?per_page=1":
+			response.StatusCode = http.StatusOK
+			response.Body = io.NopCloser(strings.NewReader(`[{"tag_name":"v0.1.2","prerelease":true,"assets":[]}]`))
+		default:
+			t.Fatalf("unexpected request: %s", request.URL.RequestURI())
+		}
+		return response, nil
+	})}
+
+	result, err := loadRelease(context.Background(), options{
+		Repository: "pratik-anurag/wts",
+		Version:    "latest",
+		APIBase:    "https://api.github.test",
+		Client:     client,
+	})
+	if err != nil {
+		t.Fatalf("loadRelease() error = %v", err)
+	}
+	if result.TagName != "v0.1.2" || !result.Prerelease {
+		t.Fatalf("loadRelease() = %#v, want the v0.1.2 preview", result)
+	}
+	wantRequests := []string{
+		"/repos/pratik-anurag/wts/releases/latest",
+		"/repos/pratik-anurag/wts/releases?per_page=1",
+	}
+	if fmt.Sprint(requests) != fmt.Sprint(wantRequests) {
+		t.Fatalf("requests = %v, want %v", requests, wantRequests)
 	}
 }

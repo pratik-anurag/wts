@@ -26,6 +26,8 @@ function main() {
     "./scripts/register-ts.mjs",
     "--test",
     "scripts/run-node-tests.test.mjs",
+    "scripts/desktop-release-workflow.test.mjs",
+    "scripts/go-installer-command.test.mjs",
     "src/lib/workspace/__tests__/*.test.ts",
     "src/lib/git/__tests__/*.ts",
     "src/lib/snapshot/__tests__/*.test.ts",

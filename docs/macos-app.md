@@ -73,12 +73,12 @@ lower requirement. An explicitly managed standalone Tauri binary can be
 selected with the absolute `WTS_TAURI_BIN` path.
 `WTS_TAURI_CLI_VERSION` changes the required version.
 
-For WTS version `0.1.1`, output is:
+For WTS version `0.1.2`, output is:
 
 ```text
 target/release/bundle/macos/WTS.app
-target/release/bundle/dmg/WTS_0.1.1_aarch64.dmg
-target/release/bundle/dmg/WTS_0.1.1_aarch64.dmg.sha256
+target/release/bundle/dmg/WTS_0.1.2_aarch64.dmg
+target/release/bundle/dmg/WTS_0.1.2_aarch64.dmg.sha256
 ```
 
 The helper leaves Tauri's artifacts in their canonical build directories. It
@@ -155,9 +155,13 @@ WebView, so it remains unavailable in this preview `.app`.
 
 The `Desktop build and release` GitHub Actions workflow now builds an ad-hoc
 signed Apple Silicon QA artifact on pushes to `wts-ui` and manual runs. A tag
-matching the desktop version, such as `v0.1.1`, takes the release path and
-publishes a Developer ID signed and Apple-notarized DMG with a SHA-256 checksum.
-The release job also verifies that the tagged commit belongs to `wts-ui`.
+matching the desktop version, such as `v0.1.2`, takes the release path and
+publishes a macOS app, a DMG, and a SHA-256 checksum. The release job verifies
+that the tagged commit belongs to `wts-ui`.
+
+The workflow uses Developer ID signing and Apple notarization when all release
+credentials exist. If a credential is missing, the workflow publishes an
+ad-hoc-signed GitHub prerelease. Apple does not notarize this preview.
 
 Configure these GitHub Actions secrets before creating a release tag:
 
@@ -170,9 +174,9 @@ APPLE_TEAM_ID
 ```
 
 `APPLE_CERTIFICATE` is the base64-encoded Developer ID Application `.p12`.
-`APPLE_PASSWORD` is an app-specific Apple password. The workflow stops before
-building if any release credential is missing, or if the tag does not equal
-`v` plus `src-tauri/tauri.conf.json`'s version.
+`APPLE_PASSWORD` is an app-specific Apple password. The workflow publishes a
+preview if any release credential is missing. The tag must equal `v` plus the
+version in `src-tauri/tauri.conf.json`.
 
 Set the secrets with GitHub CLI:
 
@@ -189,8 +193,8 @@ tag:
 
 ```bash
 git switch wts-ui
-git tag -a v0.1.1 -m "WTS v0.1.1"
-git push origin v0.1.1
+git tag -a v0.1.2 -m "WTS v0.1.2"
+git push origin v0.1.2
 gh run watch
 ```
 
@@ -238,15 +242,15 @@ Go versions use `go run` or `go install`, because `go get` manages module
 dependencies and no longer installs executable commands:
 
 ```bash
-go run github.com/pratik-anurag/wts/cmd/wts-install@latest
+go run github.com/pratik-anurag/wts/cmd/wts-ui@latest
 ```
 
 To keep the installer command available, install it once and ensure Go's binary
 directory is on `PATH`:
 
 ```bash
-go install github.com/pratik-anurag/wts/cmd/wts-install@latest
-wts-install
+go install github.com/pratik-anurag/wts/cmd/wts-ui@latest
+wts-ui
 ```
 
 The installer downloads the release's signed `.app.tar.gz`, verifies the
@@ -255,8 +259,8 @@ and installs it in `~/Applications`. It does not download or mount a DMG. To
 install a specific release or use the system Applications directory:
 
 ```bash
-wts-install -version v0.1.1
-wts-install -applications-dir /Applications
+wts-ui -version v0.1.2
+wts-ui -applications-dir /Applications
 ```
 
 The system Applications directory can require administrator-owned permissions.
@@ -266,7 +270,7 @@ Download the DMG and checksum for a specific version with GitHub CLI:
 
 ```bash
 mkdir -p "$PWD/wts-download"
-gh release download v0.1.1 --pattern '*.dmg' --pattern '*.sha256' --dir "$PWD/wts-download"
+gh release download v0.1.2 --pattern '*.dmg' --pattern '*.sha256' --dir "$PWD/wts-download"
 cd "$PWD/wts-download"
 shasum -a 256 -c WTS-macOS-arm64.sha256
 open ./*.dmg

@@ -34,8 +34,9 @@ type releaseAsset struct {
 }
 
 type release struct {
-	TagName string         `json:"tag_name"`
-	Assets  []releaseAsset `json:"assets"`
+	TagName    string         `json:"tag_name"`
+	Prerelease bool           `json:"prerelease"`
+	Assets     []releaseAsset `json:"assets"`
 }
 
 type options struct {
@@ -71,7 +72,7 @@ func main() {
 }
 
 func fatalf(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "wts-install: "+format+"\n", args...)
+	fmt.Fprintf(os.Stderr, "wts-ui: "+format+"\n", args...)
 	os.Exit(1)
 }
 
@@ -83,7 +84,7 @@ func install(ctx context.Context, opts options) error {
 		return fmt.Errorf("repository must use the owner/name form")
 	}
 	if opts.Version != "latest" && !validTag(opts.Version) {
-		return fmt.Errorf("version must be latest or a release tag such as v0.1.1")
+		return fmt.Errorf("version must be latest or a release tag such as v0.1.2")
 	}
 	applicationsDir, err := filepath.Abs(opts.ApplicationsDir)
 	if err != nil {
@@ -96,6 +97,9 @@ func install(ctx context.Context, opts options) error {
 	release, err := loadRelease(ctx, opts)
 	if err != nil {
 		return err
+	}
+	if release.Prerelease {
+		fmt.Fprintln(os.Stderr, "wts-ui: warning: This is a preview release. It can use an ad-hoc macOS signature.")
 	}
 	archiveAsset, checksumAsset, err := releaseAssets(release.Assets)
 	if err != nil {
@@ -122,7 +126,7 @@ func install(ctx context.Context, opts options) error {
 	if err := os.MkdirAll(applicationsDir, 0o755); err != nil {
 		return fmt.Errorf("create Applications directory: %w", err)
 	}
-	stagingRoot, err := os.MkdirTemp(applicationsDir, ".wts-install-")
+	stagingRoot, err := os.MkdirTemp(applicationsDir, ".wts-ui-")
 	if err != nil {
 		return fmt.Errorf("create installation staging directory: %w", err)
 	}
@@ -199,34 +203,69 @@ func validName(value string) bool {
 }
 
 func loadRelease(ctx context.Context, opts options) (release, error) {
-	endpoint := strings.TrimRight(opts.APIBase, "/") + "/repos/" + opts.Repository + "/releases/"
-	if opts.Version == "latest" {
-		endpoint += "latest"
-	} else {
-		endpoint += "tags/" + url.PathEscape(opts.Version)
+	releasesEndpoint := strings.TrimRight(opts.APIBase, "/") + "/repos/" + opts.Repository + "/releases"
+	if opts.Version != "latest" {
+		var result release
+		status, err := readGitHubJSON(ctx, opts, releasesEndpoint+"/tags/"+url.PathEscape(opts.Version), &result)
+		if err != nil {
+			return release{}, err
+		}
+		if status != http.StatusOK {
+			return release{}, fmt.Errorf("GitHub release request returned %s", http.StatusText(status))
+		}
+		return validateRelease(result)
 	}
+
+	var result release
+	status, err := readGitHubJSON(ctx, opts, releasesEndpoint+"/latest", &result)
+	if err != nil {
+		return release{}, err
+	}
+	if status == http.StatusNotFound {
+		var releases []release
+		status, err = readGitHubJSON(ctx, opts, releasesEndpoint+"?per_page=1", &releases)
+		if err != nil {
+			return release{}, err
+		}
+		if status != http.StatusOK {
+			return release{}, fmt.Errorf("GitHub release request returned %s", http.StatusText(status))
+		}
+		if len(releases) == 0 {
+			return release{}, errors.New("GitHub has no published WTS release")
+		}
+		result = releases[0]
+	} else if status != http.StatusOK {
+		return release{}, fmt.Errorf("GitHub release request returned %s", http.StatusText(status))
+	}
+	return validateRelease(result)
+}
+
+func readGitHubJSON(ctx context.Context, opts options, endpoint string, target any) (int, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return release{}, fmt.Errorf("create release request: %w", err)
+		return 0, fmt.Errorf("create release request: %w", err)
 	}
 	request.Header.Set("Accept", "application/vnd.github+json")
-	request.Header.Set("User-Agent", "wts-install")
+	request.Header.Set("User-Agent", "wts-ui")
 	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
 		request.Header.Set("Authorization", "Bearer "+token)
 	}
 	response, err := opts.Client.Do(request)
 	if err != nil {
-		return release{}, fmt.Errorf("read GitHub release: %w", err)
+		return 0, fmt.Errorf("read GitHub release: %w", err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return release{}, fmt.Errorf("GitHub release request returned %s", response.Status)
+		return response.StatusCode, nil
 	}
-	var result release
 	decoder := json.NewDecoder(io.LimitReader(response.Body, 2*1024*1024))
-	if err := decoder.Decode(&result); err != nil {
-		return release{}, fmt.Errorf("decode GitHub release: %w", err)
+	if err := decoder.Decode(target); err != nil {
+		return 0, fmt.Errorf("decode GitHub release: %w", err)
 	}
+	return response.StatusCode, nil
+}
+
+func validateRelease(result release) (release, error) {
 	if !validTag(result.TagName) {
 		return release{}, errors.New("GitHub returned an invalid release tag")
 	}
@@ -265,7 +304,7 @@ func download(ctx context.Context, client *http.Client, source, destination stri
 	if err != nil {
 		return err
 	}
-	request.Header.Set("User-Agent", "wts-install")
+	request.Header.Set("User-Agent", "wts-ui")
 	response, err := client.Do(request)
 	if err != nil {
 		return err
