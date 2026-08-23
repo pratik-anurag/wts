@@ -39,10 +39,10 @@ jobs:
             package-lock.json
             ui/package-lock.json
 
-      - name: Use Rust 1.85
+      - name: Use Rust 1.98
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.85.0
+          toolchain: 1.98.0
           targets: aarch64-apple-darwin
 
       - name: Cache Rust builds
@@ -142,10 +142,10 @@ jobs:
             package-lock.json
             ui/package-lock.json
 
-      - name: Use Rust 1.85
+      - name: Use Rust 1.98
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.85.0
+          toolchain: 1.98.0
           targets: aarch64-apple-darwin
 
       - name: Cache Rust builds

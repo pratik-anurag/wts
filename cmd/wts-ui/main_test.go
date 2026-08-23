@@ -100,7 +100,7 @@ func TestLoadReleaseFallsBackToNewestPreview(t *testing.T) {
 			response.Body = io.NopCloser(strings.NewReader("not found"))
 		case "/repos/pratik-anurag/wts/releases?per_page=1":
 			response.StatusCode = http.StatusOK
-			response.Body = io.NopCloser(strings.NewReader(`[{"tag_name":"v0.1.2","prerelease":true,"assets":[]}]`))
+			response.Body = io.NopCloser(strings.NewReader(`[{"tag_name":"v0.1.3","prerelease":true,"assets":[]}]`))
 		default:
 			t.Fatalf("unexpected request: %s", request.URL.RequestURI())
 		}
@@ -116,8 +116,8 @@ func TestLoadReleaseFallsBackToNewestPreview(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadRelease() error = %v", err)
 	}
-	if result.TagName != "v0.1.2" || !result.Prerelease {
-		t.Fatalf("loadRelease() = %#v, want the v0.1.2 preview", result)
+	if result.TagName != "v0.1.3" || !result.Prerelease {
+		t.Fatalf("loadRelease() = %#v, want the v0.1.3 preview", result)
 	}
 	wantRequests := []string{
 		"/repos/pratik-anurag/wts/releases/latest",

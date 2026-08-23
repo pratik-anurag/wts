@@ -56,7 +56,7 @@ troubleshooting.
 Core development:
 
 - Node.js and npm
-- Rust 1.85 or later
+- Rust 1.98 or later
 - Git
 
 Desktop development:

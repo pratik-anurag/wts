@@ -30,4 +30,11 @@ test("tagged desktop releases use an ad-hoc preview when Apple credentials are a
   const checksum = step("Publish verified checksum");
   assert.match(checksum.run, /WTS_RELEASE_SIGNING_MODE.*developer-id/);
   assert.match(checksum.run, /xcrun stapler validate/);
+
+  for (const jobName of ["build-macos", "release-macos"]) {
+    const rust = workflow.jobs[jobName].steps.find(
+      (candidate) => candidate.name === "Use Rust 1.98",
+    );
+    assert.equal(rust.with.toolchain, "1.98.0");
+  }
 });

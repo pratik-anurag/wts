@@ -5479,7 +5479,7 @@ dependencies = [
 
 [[package]]
 name = "wts-app"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "hex",
  "json5",
@@ -5501,7 +5501,7 @@ dependencies = [
 
 [[package]]
 name = "wts-core"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "hex",
  "serde",
@@ -5513,7 +5513,7 @@ dependencies = [
 
 [[package]]
 name = "wts-desktop"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "rfd",
  "serde",
@@ -5548,7 +5548,7 @@ dependencies = [
 
 [[package]]
 name = "wts-integrations"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "json5",
  "reqwest",
@@ -5561,7 +5561,7 @@ dependencies = [
 
 [[package]]
 name = "wts-server"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "axum",
  "hex",
@@ -5584,7 +5584,7 @@ dependencies = [
 
 [[package]]
 name = "wts-store"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "hex",
  "rusqlite",

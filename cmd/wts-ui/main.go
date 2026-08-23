@@ -84,7 +84,7 @@ func install(ctx context.Context, opts options) error {
 		return fmt.Errorf("repository must use the owner/name form")
 	}
 	if opts.Version != "latest" && !validTag(opts.Version) {
-		return fmt.Errorf("version must be latest or a release tag such as v0.1.2")
+		return fmt.Errorf("version must be latest or a release tag such as v0.1.3")
 	}
 	applicationsDir, err := filepath.Abs(opts.ApplicationsDir)
 	if err != nil {

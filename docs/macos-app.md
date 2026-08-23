@@ -73,12 +73,12 @@ lower requirement. An explicitly managed standalone Tauri binary can be
 selected with the absolute `WTS_TAURI_BIN` path.
 `WTS_TAURI_CLI_VERSION` changes the required version.
 
-For WTS version `0.1.2`, output is:
+For WTS version `0.1.3`, output is:
 
 ```text
 target/release/bundle/macos/WTS.app
-target/release/bundle/dmg/WTS_0.1.2_aarch64.dmg
-target/release/bundle/dmg/WTS_0.1.2_aarch64.dmg.sha256
+target/release/bundle/dmg/WTS_0.1.3_aarch64.dmg
+target/release/bundle/dmg/WTS_0.1.3_aarch64.dmg.sha256
 ```
 
 The helper leaves Tauri's artifacts in their canonical build directories. It
@@ -155,7 +155,7 @@ WebView, so it remains unavailable in this preview `.app`.
 
 The `Desktop build and release` GitHub Actions workflow now builds an ad-hoc
 signed Apple Silicon QA artifact on pushes to `wts-ui` and manual runs. A tag
-matching the desktop version, such as `v0.1.2`, takes the release path and
+matching the desktop version, such as `v0.1.3`, takes the release path and
 publishes a macOS app, a DMG, and a SHA-256 checksum. The release job verifies
 that the tagged commit belongs to `wts-ui`.
 
@@ -193,8 +193,8 @@ tag:
 
 ```bash
 git switch wts-ui
-git tag -a v0.1.2 -m "WTS v0.1.2"
-git push origin v0.1.2
+git tag -a v0.1.3 -m "WTS v0.1.3"
+git push origin v0.1.3
 gh run watch
 ```
 
@@ -259,7 +259,7 @@ and installs it in `~/Applications`. It does not download or mount a DMG. To
 install a specific release or use the system Applications directory:
 
 ```bash
-wts-ui -version v0.1.2
+wts-ui -version v0.1.3
 wts-ui -applications-dir /Applications
 ```
 
@@ -270,7 +270,7 @@ Download the DMG and checksum for a specific version with GitHub CLI:
 
 ```bash
 mkdir -p "$PWD/wts-download"
-gh release download v0.1.2 --pattern '*.dmg' --pattern '*.sha256' --dir "$PWD/wts-download"
+gh release download v0.1.3 --pattern '*.dmg' --pattern '*.sha256' --dir "$PWD/wts-download"
 cd "$PWD/wts-download"
 shasum -a 256 -c WTS-macOS-arm64.sha256
 open ./*.dmg
