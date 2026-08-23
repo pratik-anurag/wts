@@ -79,7 +79,7 @@ Optional tools:
 On Apple Silicon macOS with Go installed:
 
 ```bash
-go run github.com/nandanhere/wts-ui/cmd/wts-install@latest
+go run github.com/pratik-anurag/wts/cmd/wts-install@latest
 ```
 
 This installs the verified application in `~/Applications` without mounting a

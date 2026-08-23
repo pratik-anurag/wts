@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	defaultRepository = "nandanhere/wts-ui"
+	defaultRepository = "pratik-anurag/wts"
 	bundleIdentifier  = "dev.wts.desktop"
 	maxDownloadBytes  = 1024 * 1024 * 1024
 	maxArchiveEntries = 100_000
@@ -83,7 +83,7 @@ func install(ctx context.Context, opts options) error {
 		return fmt.Errorf("repository must use the owner/name form")
 	}
 	if opts.Version != "latest" && !validTag(opts.Version) {
-		return fmt.Errorf("version must be latest or a release tag such as v0.1.0")
+		return fmt.Errorf("version must be latest or a release tag such as v0.1.1")
 	}
 	applicationsDir, err := filepath.Abs(opts.ApplicationsDir)
 	if err != nil {

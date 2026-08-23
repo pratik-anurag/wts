@@ -73,12 +73,12 @@ lower requirement. An explicitly managed standalone Tauri binary can be
 selected with the absolute `WTS_TAURI_BIN` path.
 `WTS_TAURI_CLI_VERSION` changes the required version.
 
-For WTS version `0.1.0`, output is:
+For WTS version `0.1.1`, output is:
 
 ```text
 target/release/bundle/macos/WTS.app
-target/release/bundle/dmg/WTS_0.1.0_aarch64.dmg
-target/release/bundle/dmg/WTS_0.1.0_aarch64.dmg.sha256
+target/release/bundle/dmg/WTS_0.1.1_aarch64.dmg
+target/release/bundle/dmg/WTS_0.1.1_aarch64.dmg.sha256
 ```
 
 The helper leaves Tauri's artifacts in their canonical build directories. It
@@ -155,7 +155,7 @@ WebView, so it remains unavailable in this preview `.app`.
 
 The `Desktop build and release` GitHub Actions workflow now builds an ad-hoc
 signed Apple Silicon QA artifact on pushes to `wts-ui` and manual runs. A tag
-matching the desktop version, such as `v0.1.0`, takes the release path and
+matching the desktop version, such as `v0.1.1`, takes the release path and
 publishes a Developer ID signed and Apple-notarized DMG with a SHA-256 checksum.
 The release job also verifies that the tagged commit belongs to `wts-ui`.
 
@@ -189,8 +189,8 @@ tag:
 
 ```bash
 git switch wts-ui
-git tag -a v0.1.0 -m "WTS v0.1.0"
-git push origin v0.1.0
+git tag -a v0.1.1 -m "WTS v0.1.1"
+git push origin v0.1.1
 gh run watch
 ```
 
@@ -238,14 +238,14 @@ Go versions use `go run` or `go install`, because `go get` manages module
 dependencies and no longer installs executable commands:
 
 ```bash
-go run github.com/nandanhere/wts-ui/cmd/wts-install@latest
+go run github.com/pratik-anurag/wts/cmd/wts-install@latest
 ```
 
 To keep the installer command available, install it once and ensure Go's binary
 directory is on `PATH`:
 
 ```bash
-go install github.com/nandanhere/wts-ui/cmd/wts-install@latest
+go install github.com/pratik-anurag/wts/cmd/wts-install@latest
 wts-install
 ```
 
@@ -255,7 +255,7 @@ and installs it in `~/Applications`. It does not download or mount a DMG. To
 install a specific release or use the system Applications directory:
 
 ```bash
-wts-install -version v0.1.0
+wts-install -version v0.1.1
 wts-install -applications-dir /Applications
 ```
 
@@ -266,7 +266,7 @@ Download the DMG and checksum for a specific version with GitHub CLI:
 
 ```bash
 mkdir -p "$PWD/wts-download"
-gh release download v0.1.0 --pattern '*.dmg' --pattern '*.sha256' --dir "$PWD/wts-download"
+gh release download v0.1.1 --pattern '*.dmg' --pattern '*.sha256' --dir "$PWD/wts-download"
 cd "$PWD/wts-download"
 shasum -a 256 -c WTS-macOS-arm64.sha256
 open ./*.dmg
