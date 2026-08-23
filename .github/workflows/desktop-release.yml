@@ -1,0 +1,191 @@
+name: Desktop build and release
+
+on:
+  push:
+    branches:
+      - wts-ui
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wts-desktop-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
+env:
+  CARGO_INCREMENTAL: "0"
+  MACOS_TARGET: aarch64-apple-darwin
+
+jobs:
+  build-macos:
+    name: Build Apple Silicon QA artifact
+    if: github.ref_type != 'tag'
+    runs-on: macos-14
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out WTS
+        uses: actions/checkout@v4
+
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.1
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            ui/package-lock.json
+
+      - name: Use Rust 1.85
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.85.0
+          targets: aarch64-apple-darwin
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm ci --prefix ui
+
+      - name: Build the trusted sidecar
+        run: |
+          cargo build --locked --release --target "$MACOS_TARGET" -p wts-app --bin wts-report
+          mkdir -p src-tauri/binaries
+          cp "target/$MACOS_TARGET/release/wts-report" "src-tauri/binaries/wts-report-$MACOS_TARGET"
+          chmod 755 "src-tauri/binaries/wts-report-$MACOS_TARGET"
+
+      - name: Build ad-hoc signed desktop bundle
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
+        env:
+          APPLE_SIGNING_IDENTITY: "-"
+        with:
+          args: --target aarch64-apple-darwin --bundles app,dmg
+
+      - name: Create and verify checksum
+        run: |
+          desktop_version="$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          bundle_root="target/$MACOS_TARGET/release/bundle"
+          tar -czf "$bundle_root/dmg/WTS_${desktop_version}_aarch64.app.tar.gz" -C "$bundle_root/macos" WTS.app
+          cd "$bundle_root/dmg"
+          shasum -a 256 ./*.dmg ./*.app.tar.gz > WTS-macOS-arm64.sha256
+          shasum -a 256 -c WTS-macOS-arm64.sha256
+
+      - name: Upload QA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WTS-macOS-arm64-${{ github.sha }}
+          path: |
+            target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+            target/aarch64-apple-darwin/release/bundle/dmg/*.app.tar.gz
+            target/aarch64-apple-darwin/release/bundle/dmg/*.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  release-macos:
+    name: Sign, notarize, and release Apple Silicon app
+    if: github.ref_type == 'tag'
+    runs-on: macos-14
+    timeout-minutes: 60
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out WTS
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require release credentials
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          for secret_name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            test -n "${!secret_name}" || { echo "Missing required secret: $secret_name" >&2; exit 1; }
+          done
+
+      - name: Require tag to match the desktop version
+        run: |
+          git fetch origin wts-ui:refs/remotes/origin/wts-ui
+          git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/wts-ui || {
+            echo "Release tags must point to a commit from the wts-ui branch." >&2
+            exit 1
+          }
+          desktop_version="$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          test "$GITHUB_REF_NAME" = "v$desktop_version" || {
+            echo "Tag $GITHUB_REF_NAME must match desktop version v$desktop_version." >&2
+            exit 1
+          }
+
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.1
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            ui/package-lock.json
+
+      - name: Use Rust 1.85
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.85.0
+          targets: aarch64-apple-darwin
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm ci --prefix ui
+
+      - name: Build the trusted sidecar
+        run: |
+          cargo build --locked --release --target "$MACOS_TARGET" -p wts-app --bin wts-report
+          mkdir -p src-tauri/binaries
+          cp "target/$MACOS_TARGET/release/wts-report" "src-tauri/binaries/wts-report-$MACOS_TARGET"
+          chmod 755 "src-tauri/binaries/wts-report-$MACOS_TARGET"
+
+      - name: Build and publish signed desktop release
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: WTS ${{ github.ref_name }}
+          releaseBody: Install with the Go installer, or download and verify the Apple Silicon artifact below.
+          generateReleaseNotes: true
+          releaseDraft: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          uploadUpdaterJson: false
+          args: --target aarch64-apple-darwin --bundles app,dmg
+
+      - name: Publish verified checksum
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          desktop_version="$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          bundle_root="target/$MACOS_TARGET/release/bundle"
+          codesign --verify --deep --strict --verbose=2 "$bundle_root/macos/WTS.app"
+          xcrun stapler validate "$bundle_root/macos/WTS.app"
+          tar -czf "$bundle_root/dmg/WTS_${desktop_version}_aarch64.app.tar.gz" -C "$bundle_root/macos" WTS.app
+          cd "$bundle_root/dmg"
+          shasum -a 256 ./*.dmg ./*.app.tar.gz > WTS-macOS-arm64.sha256
+          shasum -a 256 -c WTS-macOS-arm64.sha256
+          gh release upload "$GITHUB_REF_NAME" ./*.app.tar.gz WTS-macOS-arm64.sha256 --clobber
+          gh release edit "$GITHUB_REF_NAME" --draft=false

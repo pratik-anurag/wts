@@ -7414,7 +7414,7 @@
 
 .reviewWorkspaceCallout small {
   color: var(--wts-blue);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.08em;
 }
@@ -7428,7 +7428,7 @@
 .reviewWorkspaceCallout p {
   margin-top: 2px;
   color: var(--wts-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .reviewWorkspaceCallout button {
@@ -7442,7 +7442,7 @@
   border: 1px solid var(--wts-blue);
   border-radius: var(--wts-radius-sm);
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 750;
 }
 

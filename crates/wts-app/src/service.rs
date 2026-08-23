@@ -4983,6 +4983,27 @@ impl LocalWtsService {
         self.index_workspace_graph_inner(workspace_id, true)
     }
 
+    /// Builds a Graphify index inside one validated managed worktree. The
+    /// repository and recorded branch are re-inspected immediately before the
+    /// process starts, so callers cannot substitute an arbitrary path.
+    pub fn index_worktree_graph(
+        &self,
+        workspace_id: Uuid,
+        repository_id: &str,
+    ) -> Result<GraphIndexResult, LocalWtsError> {
+        let _guard = self
+            .inner
+            .adapter_lock
+            .lock()
+            .map_err(|_| LocalWtsError::AdapterRejected)?;
+        let (_, _, worktree, _) =
+            self.load_selected_materialized_worktree(workspace_id, repository_id)?;
+        self.inner
+            .adapter
+            .index_graph(workspace_id, Path::new(&worktree.target_display_path))
+            .map_err(map_adapter_failure)
+    }
+
     fn index_workspace_graph_inner(
         &self,
         workspace_id: Uuid,

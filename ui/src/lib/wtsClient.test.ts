@@ -3784,7 +3784,7 @@ describe("Tauri workspace client", () => {
     await client.getSetupSnapshot();
     await client.listRepositories();
     await client.addTrustedRepositoryRootFromPicker();
-    await client.removeTrustedRepositoryRoot(" /Users/me/projects ");
+    await client.removeTrustedRepositoryRoot(" /Users/example/projects ");
     await client.preflightWorkspace("ws-platform-42");
     await client.getWorkspaceMaterialization("ws-platform-42");
     await client.materializeWorkspace(
@@ -3814,7 +3814,7 @@ describe("Tauri workspace client", () => {
       ["add_trusted_repository_root_from_picker", undefined],
       [
         "remove_trusted_repository_root",
-        { repositoryRoot: "/Users/me/projects" },
+        { repositoryRoot: "/Users/example/projects" },
       ],
       ["preflight_workspace", { workspaceId: "ws-platform-42" }],
       ["get_workspace_materialization", { workspaceId: "ws-platform-42" }],

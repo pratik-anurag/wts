@@ -153,7 +153,48 @@ WebView, so it remains unavailable in this preview `.app`.
 
 ## Future direct distribution
 
-Ship a signed and notarized DMG:
+The `Desktop build and release` GitHub Actions workflow now builds an ad-hoc
+signed Apple Silicon QA artifact on pushes to `wts-ui` and manual runs. A tag
+matching the desktop version, such as `v0.1.0`, takes the release path and
+publishes a Developer ID signed and Apple-notarized DMG with a SHA-256 checksum.
+The release job also verifies that the tagged commit belongs to `wts-ui`.
+
+Configure these GitHub Actions secrets before creating a release tag:
+
+```text
+APPLE_CERTIFICATE
+APPLE_CERTIFICATE_PASSWORD
+APPLE_ID
+APPLE_PASSWORD
+APPLE_TEAM_ID
+```
+
+`APPLE_CERTIFICATE` is the base64-encoded Developer ID Application `.p12`.
+`APPLE_PASSWORD` is an app-specific Apple password. The workflow stops before
+building if any release credential is missing, or if the tag does not equal
+`v` plus `src-tauri/tauri.conf.json`'s version.
+
+Set the secrets with GitHub CLI:
+
+```bash
+gh secret set APPLE_CERTIFICATE < certificate-base64.txt
+gh secret set APPLE_CERTIFICATE_PASSWORD
+gh secret set APPLE_ID
+gh secret set APPLE_PASSWORD
+gh secret set APPLE_TEAM_ID
+```
+
+Bump `src-tauri/tauri.conf.json`, commit the change, then publish the matching
+tag:
+
+```bash
+git switch wts-ui
+git tag -a v0.1.0 -m "WTS v0.1.0"
+git push origin v0.1.0
+gh run watch
+```
+
+The remaining distribution work is:
 
 1. Join the Apple Developer Program.
 2. Create a Developer ID Application certificate.
@@ -172,9 +213,9 @@ distribution, create a release-quality square transparent source, run
 `cargo tauri icon <source> --output src-tauri/icons`, retain the generated
 `icon.icns`, and verify the icon at Finder, Dock, and installer sizes.
 
-The release command will be `cargo tauri build --bundles dmg` after
-`APPLE_SIGNING_IDENTITY` names a valid `Developer ID Application` identity and
-one notarization credential set is supplied:
+The equivalent local release command is `cargo tauri build --target
+aarch64-apple-darwin --bundles app,dmg` after a Developer ID Application
+certificate is available and one notarization credential set is supplied:
 
 ```text
 APPLE_API_ISSUER + APPLE_API_KEY + APPLE_API_KEY_PATH
@@ -187,8 +228,61 @@ source control. A universal build also needs both Rust targets and uses
 `cargo tauri build --target universal-apple-darwin --bundles dmg`. The local
 preview helper deliberately does neither.
 
-The release gate must verify the resulting artifacts with `codesign`, `spctl`,
-and `xcrun stapler validate`, then install the DMG from a clean macOS account.
+The release gate must still be tested from a clean macOS account before broad
+distribution.
+
+## Install a GitHub release
+
+The recommended command-line installation uses the small Go installer. Modern
+Go versions use `go run` or `go install`, because `go get` manages module
+dependencies and no longer installs executable commands:
+
+```bash
+go run github.com/nandanhere/wts-ui/cmd/wts-install@latest
+```
+
+To keep the installer command available, install it once and ensure Go's binary
+directory is on `PATH`:
+
+```bash
+go install github.com/nandanhere/wts-ui/cmd/wts-install@latest
+wts-install
+```
+
+The installer downloads the release's signed `.app.tar.gz`, verifies the
+published SHA-256 checksum, validates the WTS bundle identifier and executable,
+and installs it in `~/Applications`. It does not download or mount a DMG. To
+install a specific release or use the system Applications directory:
+
+```bash
+wts-install -version v0.1.0
+wts-install -applications-dir /Applications
+```
+
+The system Applications directory can require administrator-owned permissions.
+The DMG remains available as a manual fallback.
+
+Download the DMG and checksum for a specific version with GitHub CLI:
+
+```bash
+mkdir -p "$PWD/wts-download"
+gh release download v0.1.0 --pattern '*.dmg' --pattern '*.sha256' --dir "$PWD/wts-download"
+cd "$PWD/wts-download"
+shasum -a 256 -c WTS-macOS-arm64.sha256
+open ./*.dmg
+```
+
+Drag **WTS** into **Applications**, eject the mounted image, then launch it:
+
+```bash
+open -a WTS
+```
+
+For an untagged QA build, open the workflow run in GitHub Actions, download the
+`WTS-macOS-arm64-<commit>` artifact, verify its included checksum, and open the
+DMG. QA artifacts are ad-hoc signed and can still require approval in macOS
+**Privacy & Security**. Tagged releases require Developer ID signing and
+notarization.
 
 ## Why not the Mac App Store initially
 

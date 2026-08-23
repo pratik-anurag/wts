@@ -3244,8 +3244,8 @@ describe("personal local workspace registry", () => {
         },
       ],
       graph: {
-        status: "ready",
-        detail: "Workspace graph is ready.",
+        status: "notStarted",
+        detail: "Workspace graph has not been indexed.",
       },
     };
     const removalPreflight = {
@@ -3301,6 +3301,13 @@ describe("personal local workspace registry", () => {
       detail: "Workspace graph refreshed.",
       durationMs: 184,
     });
+    fake.indexWorktreeGraph.mockResolvedValue({
+      workspaceId: persisted.workspaceId,
+      status: "ready",
+      graphDisplayPath: `${materialization.worktrees[0]!.targetDisplayPath}/graphify-out/graph.json`,
+      detail: "Worktree graph refreshed.",
+      durationMs: 92,
+    });
     let resolveRemoval!: (value: RemoveWorkspaceResult) => void;
     const pendingRemoval = new Promise<RemoveWorkspaceResult>((resolve) => {
       resolveRemoval = resolve;
@@ -3313,7 +3320,36 @@ describe("personal local workspace registry", () => {
     );
     await screen.findByRole("button", { name: "Workspace actions" });
 
+    await user.click(
+      screen.getByRole("button", {
+        name: `Index checkout-api worktree branch ${materialization.branchName} with Graphify`,
+      }),
+    );
+    await waitFor(() =>
+      expect(fake.indexWorktreeGraph).toHaveBeenCalledWith(
+        persisted.workspaceId,
+        "repo_checkout",
+      ),
+    );
+    expect(
+      await screen.findByText(
+        `checkout-api · branch ${materialization.branchName} indexed in 92 ms.`,
+      ),
+    ).toBeVisible();
+    expect(
+      within(screen.getByRole("region", { name: "Workspace facts" })).getByText(
+        "1 of 1 worktree indexed",
+      ),
+    ).toBeVisible();
+
     await selectWorkspaceView(user, "Verification");
+    fake.getWorkspaceMaterialization.mockResolvedValue({
+      ...materialization,
+      graph: {
+        status: "ready",
+        detail: "Workspace graph is ready.",
+      },
+    });
     await user.click(await screen.findByText("Improve coverage"));
     await user.click(
       screen.getByRole("button", { name: "Rebuild graph" }),

@@ -18,7 +18,7 @@ export const ToastItem = memo(function ToastItem({
   onDismiss,
 }: ToastItemProps) {
   useEffect(() => {
-    const timer = window.setTimeout(() => onDismiss(toast.id), 4_000);
+    const timer = window.setTimeout(() => onDismiss(toast.id), 8_000);
     return () => window.clearTimeout(timer);
   }, [toast.id, onDismiss]);
 

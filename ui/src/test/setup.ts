@@ -6,6 +6,32 @@ afterEach(() => {
   cleanup();
 });
 
+// Node 25 exposes an incomplete global Web Storage object unless a backing
+// file is configured. Keep tests deterministic with an in-memory Storage
+// implementation instead of inheriting that process-level object.
+const createTestStorage = (): Storage => {
+  const entries = new Map<string, string>();
+  return {
+    get length() {
+      return entries.size;
+    },
+    clear: () => entries.clear(),
+    getItem: (key) => entries.get(String(key)) ?? null,
+    key: (index) => [...entries.keys()][index] ?? null,
+    removeItem: (key) => entries.delete(String(key)),
+    setItem: (key, value) => entries.set(String(key), String(value)),
+  };
+};
+
+Object.defineProperty(globalThis, "localStorage", {
+  configurable: true,
+  value: createTestStorage(),
+});
+Object.defineProperty(globalThis, "sessionStorage", {
+  configurable: true,
+  value: createTestStorage(),
+});
+
 Object.defineProperty(window, "matchMedia", {
   writable: true,
   value: vi.fn().mockImplementation((query: string) => ({

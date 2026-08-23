@@ -377,6 +377,9 @@ export function fakeWorkspaceClient(options: {
   const reindexWorkspaceGraph = vi
     .fn<WorkspaceClient["reindexWorkspaceGraph"]>()
     .mockRejectedValue(new Error("Unexpected reindexWorkspaceGraph call"));
+  const indexWorktreeGraph = vi
+    .fn<WorkspaceClient["indexWorktreeGraph"]>()
+    .mockRejectedValue(new Error("Unexpected indexWorktreeGraph call"));
   const preflightWorkspaceRemoval = vi
     .fn<WorkspaceClient["preflightWorkspaceRemoval"]>()
     .mockRejectedValue(new Error("Unexpected preflightWorkspaceRemoval call"));
@@ -652,6 +655,7 @@ export function fakeWorkspaceClient(options: {
     writeWorkspaceAgentBrief,
     indexWorkspaceGraph,
     reindexWorkspaceGraph,
+    indexWorktreeGraph,
     preflightWorkspaceRemoval,
     removeWorkspace,
     runWorkspaceAgent,
@@ -738,6 +742,7 @@ export function fakeWorkspaceClient(options: {
     writeWorkspaceAgentBrief,
     indexWorkspaceGraph,
     reindexWorkspaceGraph,
+    indexWorktreeGraph,
     preflightWorkspaceRemoval,
     removeWorkspace,
     runWorkspaceAgent,

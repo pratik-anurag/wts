@@ -2,7 +2,7 @@
 name = "wts-git"
 version = "0.1.0"
 edition = "2024"
-license = "Proprietary"
+license = "MIT"
 rust-version = "1.85"
 
 [dependencies]

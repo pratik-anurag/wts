@@ -74,6 +74,7 @@
     "allow-open-workspace-change-request-draft",
     "allow-index-workspace-graph",
     "allow-reindex-workspace-graph",
+    "allow-index-worktree-graph",
     "allow-preflight-workspace-removal",
     "allow-remove-workspace",
     "allow-run-workspace-agent",

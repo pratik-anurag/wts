@@ -81,6 +81,9 @@
       "app",
       "dmg"
     ],
+    "externalBin": [
+      "binaries/wts-report"
+    ],
     "category": "DeveloperTool",
     "createUpdaterArtifacts": false,
     "icon": [

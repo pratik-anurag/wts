@@ -11,8 +11,9 @@ reviewed effect digests. It does not supply arbitrary paths, commands, or forge
 URLs as authority.
 
 > **Project status:** WTS is an early preview. Use it with repositories that
-> have a backup and review each Git effect before you apply it. The macOS QA
-> build is ad-hoc signed. It is not notarized and is not a public release.
+> have a backup and review each Git effect before you apply it. Untagged macOS
+> QA builds are ad-hoc signed. Tagged releases require Developer ID signing and
+> notarization.
 
 ## What WTS does
 
@@ -72,6 +73,18 @@ Optional tools:
 - GitLab CLI (`glab`), already configured for repository and merge-request access
 - Codex, OpenCode, Hermes, Graphify, Jira MCP, OpenProject, or ActivityWatch
   for their corresponding integrations
+
+## Install a desktop release
+
+On Apple Silicon macOS with Go installed:
+
+```bash
+go run github.com/nandanhere/wts-ui/cmd/wts-install@latest
+```
+
+This installs the verified application in `~/Applications` without mounting a
+DMG. See the [macOS application guide](./docs/macos-app.md#install-a-github-release)
+for version selection, system-wide installation, and the manual DMG fallback.
 
 ## Start from source
 
@@ -258,9 +271,9 @@ npm --prefix ui run test:e2e:install
 - [macOS application guide](./docs/macos-app.md)
 - [Performance and capacity](./docs/performance-and-capacity.md)
 
-## License status
+## License
 
-No open-source license has been selected yet. The workspace metadata remains
-`Proprietary` until the copyright owner chooses and adds a license. Do not
-redistribute this repository as open source before that release blocker is
-resolved.
+WTS is available under the [MIT License](./LICENSE).
+
+Tagged desktop releases and installation commands are documented in the
+[macOS application guide](./docs/macos-app.md#install-a-github-release).

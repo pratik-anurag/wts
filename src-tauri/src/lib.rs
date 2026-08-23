@@ -1255,6 +1255,22 @@ async fn reindex_workspace_graph(
 }
 
 #[tauri::command]
+async fn index_worktree_graph(
+    workspace_id: String,
+    repository_id: String,
+    state: tauri::State<'_, LocalWtsService>,
+) -> Result<GraphIndexResult, WorkspaceCommandError> {
+    let workspace_id = parse_workspace_id(&workspace_id)?;
+    let service = state.inner().clone();
+    run_blocking_command(move || {
+        service
+            .index_worktree_graph(workspace_id, &repository_id)
+            .map_err(local_wts_command_error)
+    })
+    .await
+}
+
+#[tauri::command]
 async fn preflight_workspace_removal(
     workspace_id: String,
     state: tauri::State<'_, LocalWtsService>,
@@ -2881,6 +2897,7 @@ pub fn run() {
             open_workspace_change_request_draft,
             index_workspace_graph,
             reindex_workspace_graph,
+            index_worktree_graph,
             preflight_workspace_removal,
             remove_workspace,
             run_workspace_agent,

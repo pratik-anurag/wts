@@ -405,6 +405,12 @@
           "markdownDescription": "Enables the index_workspace_graph command without any pre-configured scope."
         },
         {
+          "description": "Enables the index_worktree_graph command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-index-worktree-graph",
+          "markdownDescription": "Enables the index_worktree_graph command without any pre-configured scope."
+        },
+        {
           "description": "Enables the launch_agent_session command without any pre-configured scope.",
           "type": "string",
           "const": "allow-launch-agent-session",
@@ -949,6 +955,12 @@
           "type": "string",
           "const": "deny-index-workspace-graph",
           "markdownDescription": "Denies the index_workspace_graph command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the index_worktree_graph command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-index-worktree-graph",
+          "markdownDescription": "Denies the index_worktree_graph command without any pre-configured scope."
         },
         {
           "description": "Denies the launch_agent_session command without any pre-configured scope.",

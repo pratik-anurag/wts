@@ -323,6 +323,10 @@ The menu keeps infrequent lifecycle commands in one predictable place:
 - If Graphify is missing, choose **Get Graphify** to open its official project,
   install the `graphify` executable, and then choose **Verify all**. WTS also
   recognizes user tools installed in `~/.local/bin` when launched from Finder.
+- When Graphify is detected, each row under **Managed worktrees** also shows
+  **Index graph**. It revalidates that repository's managed path and recorded
+  branch, then writes `graphify-out/graph.json` inside that worktree. Generated
+  Graphify files can appear as local work unless the repository ignores them.
 - **Create revised copy** starts a new editable plan using this workspace's
   repository and provider setup. The original record remains immutable.
 - **Remove workspace** opens a read-only effects preview before anything is

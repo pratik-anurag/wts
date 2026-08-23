@@ -3383,6 +3383,67 @@ fn records_and_validates_an_existing_workspace_graph() {
 
 #[cfg(unix)]
 #[test]
+fn indexes_only_the_selected_managed_worktree_on_its_recorded_branch() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let executable_fixture = tempfile::tempdir().expect("graph executable fixture");
+    let graphify = executable_fixture.path().join("fake-graphify");
+    fs::write(
+        &graphify,
+        "#!/bin/sh\nmkdir -p \"$2/graphify-out\"\nprintf '%s' '{\"nodes\":[],\"edges\":[]}' > \"$2/graphify-out/graph.json\"\n",
+    )
+    .expect("fake graphify");
+    let mut permissions = fs::metadata(&graphify)
+        .expect("graphify metadata")
+        .permissions();
+    permissions.set_mode(0o700);
+    fs::set_permissions(&graphify, permissions).expect("graphify permissions");
+    let fixture = Fixture::with_agent_adapter(
+        ProcessWorkspaceAdapter::default().with_graphify_executable(graphify),
+    );
+    let workspace_id = fixture.create_plan(&["checkout-api", "checkout-web"]);
+    let preflight = fixture
+        .service
+        .preflight_workspace(workspace_id)
+        .expect("preflight");
+    let materialization = fixture
+        .service
+        .materialize_workspace(workspace_id, &preflight.effect_digest)
+        .expect("materialize")
+        .materialization;
+    let selected = &materialization.worktrees[0];
+
+    let result = fixture
+        .service
+        .index_worktree_graph(workspace_id, &selected.repository_id)
+        .expect("index selected worktree");
+
+    assert_eq!(result.workspace_id, workspace_id);
+    assert_eq!(
+        result.graph_display_path,
+        Path::new(&selected.target_display_path)
+            .join("graphify-out/graph.json")
+            .display()
+            .to_string()
+    );
+    assert!(Path::new(&result.graph_display_path).is_file());
+    assert!(
+        !Path::new(&materialization.workspace_display_path)
+            .join("graphify-out/graph.json")
+            .exists()
+    );
+    assert_eq!(
+        git_output(
+            Some(Path::new(&selected.target_display_path)),
+            ["branch", "--show-current"]
+        )
+        .trim(),
+        selected.branch_name
+    );
+}
+
+#[cfg(unix)]
+#[test]
 fn syncs_one_managed_repository_and_rebuilds_commit_bound_graph_evidence() {
     use std::os::unix::fs::PermissionsExt;
 

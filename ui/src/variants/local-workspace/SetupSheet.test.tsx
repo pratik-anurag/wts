@@ -625,8 +625,8 @@ describe("SetupSheet", () => {
     const user = userEvent.setup();
     const withAddedRoot: RepositoryCatalog = {
       ...repositories,
-      repositoryRootDisplayPaths: ["~/cd", "/Users/me/projects"],
-      removableRepositoryRootDisplayPaths: ["/Users/me/projects"],
+      repositoryRootDisplayPaths: ["~/cd", "/Users/example/projects"],
+      removableRepositoryRootDisplayPaths: ["/Users/example/projects"],
     };
     const rescanned: RepositoryCatalog = {
       ...repositories,
@@ -651,11 +651,11 @@ describe("SetupSheet", () => {
 
     await user.click(screen.getByRole("tab", { name: /^Repositories/ }));
     await user.click(
-      screen.getByRole("button", { name: "Remove /Users/me/projects" }),
+      screen.getByRole("button", { name: "Remove /Users/example/projects" }),
     );
 
     expect(removeTrustedRepositoryRoot).toHaveBeenCalledWith(
-      "/Users/me/projects",
+      "/Users/example/projects",
     );
     expect(onRepositoriesChange).toHaveBeenCalledWith(rescanned);
     expect(

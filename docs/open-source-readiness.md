@@ -13,7 +13,7 @@ repository. It separates source publication from public binary distribution.
 | README and user guide | Ready for preview | Recheck commands on a clean machine. |
 | Contribution guide | Ready | Keep the trusted-boundary and test requirements. |
 | Security policy | Ready | Enable private vulnerability reporting on the public host. |
-| Open-source license | **Blocked** | Select a license, add `LICENSE`, and update Cargo and package metadata. |
+| Open-source license | Ready | Keep `LICENSE` and MIT package metadata aligned. |
 | Git history | **Blocked for a full-history push** | Publish a reviewed clean snapshot or sanitize history before it becomes public. |
 | Git remote | **Blocked for a public push** | Add a new public destination after the clean-snapshot decision. Keep the existing private remote separate. |
 | macOS public binary | **Blocked** | Use Developer ID signing, notarization, stapling, and an HTTPS update feed. |
@@ -69,24 +69,9 @@ feature change.
 
 ## License decision
 
-The root Cargo workspace currently declares `license = "Proprietary"`. The
-repository is not open source until the copyright owner selects a license and
-grants redistribution rights.
-
-Common options are:
-
-- **Apache-2.0** for an explicit patent grant and notice requirements
-- **MIT** for a short, permissive license
-- **Apache-2.0 OR MIT** when contributors and downstream Rust users may choose
-  either license
-
-After the decision:
-
-1. Add the exact license text as `LICENSE` or the required license files.
-2. Update `Cargo.toml` and every published package manifest.
-3. Add repository and license metadata to package manifests.
-4. Add any required copyright and notice files.
-5. Run the complete test and public-source audit gates.
+WTS is licensed under the MIT License. The exact text is stored in `LICENSE`,
+and Cargo and npm package metadata use the SPDX identifier `MIT`. Keep those
+sources aligned when adding a package or changing release metadata.
 
 ## Public source release gate
 

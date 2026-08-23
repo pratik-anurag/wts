@@ -791,7 +791,7 @@
 
 .installLink:disabled {
   color: var(--wts-faint);
-  cursor: wait;
+  cursor: progress;
 }
 
 .installAction {
@@ -1110,7 +1110,7 @@
 }
 
 .repositoryRootPath button:disabled {
-  cursor: wait;
+  cursor: progress;
   opacity: 0.55;
 }
 
@@ -1151,7 +1151,7 @@
 }
 
 .repositoryRootActions button:disabled {
-  cursor: wait;
+  cursor: progress;
   opacity: 0.55;
 }
 

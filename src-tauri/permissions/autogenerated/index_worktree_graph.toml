@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-index-worktree-graph"
+description = "Enables the index_worktree_graph command without any pre-configured scope."
+commands.allow = ["index_worktree_graph"]
+
+[[permission]]
+identifier = "deny-index-worktree-graph"
+description = "Denies the index_worktree_graph command without any pre-configured scope."
+commands.deny = ["index_worktree_graph"]

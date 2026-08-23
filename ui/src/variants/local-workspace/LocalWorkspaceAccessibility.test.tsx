@@ -50,7 +50,7 @@ describe("LocalWorkspace Accessibility and Consistency Improvements", () => {
         expect(screen.getByText("Tooltip Plan")).toBeInTheDocument();
       });
 
-      const jiraBadge = screen.getByText("Jira OTHER-100");
+      const jiraBadge = screen.getByText("OTHER-100");
       await user.hover(jiraBadge);
 
       await waitFor(() => {

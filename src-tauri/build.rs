@@ -65,6 +65,7 @@ fn main() {
             "open_workspace_change_request_draft",
             "index_workspace_graph",
             "reindex_workspace_graph",
+            "index_worktree_graph",
             "preflight_workspace_removal",
             "remove_workspace",
             "run_workspace_agent",

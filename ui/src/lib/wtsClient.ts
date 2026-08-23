@@ -2033,6 +2033,10 @@ export interface WorkspaceClient {
   ): Promise<WorkspaceAgentBriefResult>;
   indexWorkspaceGraph(workspaceId: string): Promise<GraphIndexResult>;
   reindexWorkspaceGraph(workspaceId: string): Promise<GraphIndexResult>;
+  indexWorktreeGraph(
+    workspaceId: string,
+    repositoryId: string,
+  ): Promise<GraphIndexResult>;
   preflightWorkspaceRemoval(
     workspaceId: string,
   ): Promise<WorkspaceRemovalPreflight>;
@@ -9379,6 +9383,20 @@ class HttpWorkspaceClient implements WorkspaceClient {
     );
   }
 
+  async indexWorktreeGraph(
+    workspaceId: string,
+    repositoryId: string,
+  ): Promise<GraphIndexResult> {
+    const workspace = requiredWorkspaceId(workspaceId);
+    const repository = requiredRepositoryId(repositoryId);
+    return normalizeGraphIndexResult(
+      await this.request(
+        `/api/v1/workspaces/${encodeURIComponent(workspace)}/worktrees/${encodeURIComponent(repository)}/graph/index`,
+        { method: "POST" },
+      ),
+    );
+  }
+
   async preflightWorkspaceRemoval(
     workspaceId: string,
   ): Promise<WorkspaceRemovalPreflight> {
@@ -10601,6 +10619,20 @@ class TauriWorkspaceClient implements WorkspaceClient {
     return normalizeGraphIndexResult(
       await this.invoke("reindex_workspace_graph", {
         workspaceId: workspace,
+      }),
+    );
+  }
+
+  async indexWorktreeGraph(
+    workspaceId: string,
+    repositoryId: string,
+  ): Promise<GraphIndexResult> {
+    const workspace = requiredWorkspaceId(workspaceId);
+    const repository = requiredRepositoryId(repositoryId);
+    return normalizeGraphIndexResult(
+      await this.invoke("index_worktree_graph", {
+        workspaceId: workspace,
+        repositoryId: repository,
       }),
     );
   }

@@ -617,6 +617,11 @@ pub trait MvpBackend: RegistryBackend {
     ) -> Result<Self::AgentBrief, MvpFailure>;
     fn index_graph(&self, workspace_id: Uuid) -> Result<Self::GraphIndex, MvpFailure>;
     fn reindex_graph(&self, workspace_id: Uuid) -> Result<Self::GraphIndex, MvpFailure>;
+    fn index_worktree_graph(
+        &self,
+        workspace_id: Uuid,
+        repository_id: &str,
+    ) -> Result<Self::GraphIndex, MvpFailure>;
     fn preflight_removal(&self, workspace_id: Uuid) -> Result<Self::RemovalPreflight, MvpFailure>;
     fn remove(
         &self,
@@ -1217,6 +1222,15 @@ impl MvpBackend for LocalWtsService {
 
     fn reindex_graph(&self, workspace_id: Uuid) -> Result<Self::GraphIndex, MvpFailure> {
         self.reindex_workspace_graph(workspace_id)
+            .map_err(map_local_mvp_error)
+    }
+
+    fn index_worktree_graph(
+        &self,
+        workspace_id: Uuid,
+        repository_id: &str,
+    ) -> Result<Self::GraphIndex, MvpFailure> {
+        LocalWtsService::index_worktree_graph(self, workspace_id, repository_id)
             .map_err(map_local_mvp_error)
     }
 
@@ -1938,6 +1952,10 @@ fn build_router_with_admission_limits<R: MvpBackend>(
         .route(
             "/workspaces/{workspace_id}/graph/reindex",
             axum::routing::post(reindex_workspace_graph::<R>),
+        )
+        .route(
+            "/workspaces/{workspace_id}/worktrees/{repository_id}/graph/index",
+            axum::routing::post(index_worktree_graph::<R>),
         )
         .route(
             "/workspaces/{workspace_id}/removal-preflight",
@@ -2922,6 +2940,20 @@ async fn reindex_workspace_graph<R: MvpBackend>(
     let backend = Arc::clone(&state.registry);
     run_mvp_operation(&state.admission, OperationClass::Heavy, move || {
         backend.reindex_graph(workspace_id)
+    })
+    .await
+    .map(Json)
+}
+
+async fn index_worktree_graph<R: MvpBackend>(
+    State(state): State<AppState<R>>,
+    AxumPath((workspace_id, repository_id)): AxumPath<(String, String)>,
+    _empty: EmptyBody,
+) -> Result<Json<R::GraphIndex>, ApiError> {
+    let workspace_id = parse_workspace_id(&workspace_id)?;
+    let backend = Arc::clone(&state.registry);
+    run_mvp_operation(&state.admission, OperationClass::Heavy, move || {
+        backend.index_worktree_graph(workspace_id, &repository_id)
     })
     .await
     .map(Json)
@@ -6086,6 +6118,28 @@ mod tests {
                 "graphDisplayPath": format!("/Users/test/cd/{workspace_id}/graphify-out/graph.json"),
                 "detail": "Structural graph refreshed.",
                 "durationMs": 18
+            }))
+        }
+
+        fn index_worktree_graph(
+            &self,
+            workspace_id: Uuid,
+            repository_id: &str,
+        ) -> Result<Self::GraphIndex, MvpFailure> {
+            if !self
+                .materializations
+                .lock()
+                .expect("materialization test lock")
+                .contains_key(&workspace_id)
+            {
+                return Err(MvpFailure::WorkspaceNotMaterialized);
+            }
+            Ok(json!({
+                "workspaceId": workspace_id,
+                "status": "ready",
+                "graphDisplayPath": format!("/Users/test/cd/{workspace_id}/{repository_id}/graphify-out/graph.json"),
+                "detail": "Worktree graph refreshed.",
+                "durationMs": 14
             }))
         }
 

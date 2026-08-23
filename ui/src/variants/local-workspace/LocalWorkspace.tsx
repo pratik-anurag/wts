@@ -7231,6 +7231,7 @@ function WorkspaceProvisionPanel({
   commandBusy,
   preflight,
   materialization,
+  indexedWorktreeCount,
   repositoryCatalog,
   error,
   driftDetected,
@@ -7246,6 +7247,7 @@ function WorkspaceProvisionPanel({
   commandBusy: boolean;
   preflight: WorkspacePreflight | null;
   materialization: WorkspaceMaterialization | null;
+  indexedWorktreeCount: number;
   repositoryCatalog: RepositoryCatalog | null;
   error: string;
   driftDetected: boolean;
@@ -7289,10 +7291,12 @@ function WorkspaceProvisionPanel({
           </div>
           <div>
             <dt>Graph</dt>
-            <dd>
+            <dd aria-live="polite">
               {materialization.graph.status === "ready"
-                ? "Index available"
-                : "Not indexed"}
+                ? "Workspace index available"
+                : indexedWorktreeCount > 0
+                  ? `${indexedWorktreeCount} of ${materialization.worktrees.length} ${materialization.worktrees.length === 1 ? "worktree" : "worktrees"} indexed`
+                  : "Not indexed"}
             </dd>
           </div>
         </dl>
@@ -7502,6 +7506,8 @@ function DraftOverviewPanel({
   onReviseBase,
   onCreateRevisedCopy,
   onReconcile,
+  graphifyAvailable,
+  onIndexWorktreeGraph,
   onSyncRepository,
   onAlignRepository,
   onMaterialize,
@@ -7524,6 +7530,8 @@ function DraftOverviewPanel({
   onReviseBase: (repositoryId: string, baseRef: string) => void;
   onCreateRevisedCopy: () => void;
   onReconcile: () => void;
+  graphifyAvailable: boolean;
+  onIndexWorktreeGraph: (repositoryId: string) => Promise<GraphIndexResult>;
   onSyncRepository: (
     repositoryId: string,
   ) => Promise<WorkspaceRepositorySyncResult>;
@@ -7543,6 +7551,10 @@ function DraftOverviewPanel({
     | { state: "error"; detail: string };
   const [openingRepositoryId, setOpeningRepositoryId] = useState<string | null>(null);
   const [syncingRepositoryId, setSyncingRepositoryId] = useState<string | null>(null);
+  const [indexingRepositoryId, setIndexingRepositoryId] = useState<string | null>(null);
+  const [indexedWorktreeBranches, setIndexedWorktreeBranches] = useState<
+    Record<string, string>
+  >({});
   const [repositoryNotice, setRepositoryNotice] = useState("");
   const [repositoryNoticeError, setRepositoryNoticeError] = useState(false);
   const [syncBlockedRepositoryId, setSyncBlockedRepositoryId] = useState<
@@ -7557,6 +7569,17 @@ function DraftOverviewPanel({
   const [gitlabInbox, setGitlabInbox] = useState<GitlabInboxView>({
     state: "loading",
   });
+
+  useEffect(() => {
+    setIndexedWorktreeBranches({});
+  }, [workspace.id]);
+
+  const indexedWorktreeCount = materialization
+    ? materialization.worktrees.filter(
+        (worktree) =>
+          indexedWorktreeBranches[worktree.repositoryId] === worktree.branchName,
+      ).length
+    : 0;
   const [openingGitlabMergeRequestId, setOpeningGitlabMergeRequestId] =
     useState<string | null>(null);
   const [alignmentOpen, setAlignmentOpen] = useState(false);
@@ -7836,6 +7859,11 @@ function DraftOverviewPanel({
     setRepositoryNotice(`${created.label} · fetching upstream and rebuilding the graph…`);
     try {
       const result = await onSyncRepository(created.repositoryId);
+      setIndexedWorktreeBranches((current) => {
+        const next = { ...current };
+        delete next[created.repositoryId];
+        return next;
+      });
       if (
         result.workspaceId !== workspace.id ||
         result.repositoryId !== created.repositoryId
@@ -7914,6 +7942,38 @@ function DraftOverviewPanel({
       setSyncingRepositoryId(null);
     }
   };
+  const indexWorktreeGraph = async (
+    created: WorkspaceMaterialization["worktrees"][number],
+  ) => {
+    if (indexingRepositoryId || commandBusy) return;
+    setIndexingRepositoryId(created.repositoryId);
+    setRepositoryNoticeError(false);
+    setRepositoryNotice(
+      `${created.label} · indexing branch ${created.branchName}…`,
+    );
+    try {
+      const result = await onIndexWorktreeGraph(created.repositoryId);
+      if (result.workspaceId !== workspace.id) {
+        throw new Error("WTS returned a graph for another workspace.");
+      }
+      setIndexedWorktreeBranches((current) => ({
+        ...current,
+        [created.repositoryId]: created.branchName,
+      }));
+      setRepositoryNotice(
+        `${created.label} · branch ${created.branchName} indexed in ${result.durationMs} ms.`,
+      );
+    } catch (cause) {
+      setRepositoryNoticeError(true);
+      setRepositoryNotice(
+        cause instanceof Error
+          ? cause.message
+          : "Graphify could not index this worktree.",
+      );
+    } finally {
+      setIndexingRepositoryId(null);
+    }
+  };
   const alignRepository = async () => {
     if (!alignmentPreflight || alignmentState !== "ready") return;
     setAlignmentState("aligning");
@@ -7986,6 +8046,7 @@ function DraftOverviewPanel({
           commandBusy={commandBusy}
           preflight={preflight}
           materialization={materialization}
+          indexedWorktreeCount={indexedWorktreeCount}
           repositoryCatalog={repositoryCatalog}
           error={actionError}
           driftDetected={driftDetected}
@@ -8138,6 +8199,27 @@ function DraftOverviewPanel({
                                 : "Sync"}
                             </Button>
                           </InfoTooltip>
+                          {graphifyAvailable && (
+                            <InfoTooltip
+                              content={`Run Graphify only inside ${repository.label} on checked-out branch ${created.branchName}`}
+                            >
+                              <Button
+                                aria-label={`Index ${repository.label} worktree branch ${created.branchName} with Graphify`}
+                                className={styles.repoSyncButton}
+                                isDisabled={
+                                  commandBusy ||
+                                  indexingRepositoryId !== null ||
+                                  syncingRepositoryId !== null
+                                }
+                                onPress={() => void indexWorktreeGraph(created)}
+                              >
+                                <Glyph name="code" size={10} />
+                                {indexingRepositoryId === created.repositoryId
+                                  ? "Indexing…"
+                                  : "Index graph"}
+                              </Button>
+                            </InfoTooltip>
+                          )}
                         </span>
                       )}
                     </span>
@@ -11770,6 +11852,43 @@ export function LocalWorkspace({
     await reindexSelectedWorkspaceGraph(true);
   };
 
+  const indexSelectedWorktreeGraph = async (repositoryId: string) => {
+    if (!selectedWorkspace || !workspaceMaterialization) {
+      throw new Error("Open a materialized workspace before indexing a worktree.");
+    }
+    if (workspaceCommandState !== "idle") {
+      throw new Error("Wait for the current workspace command to finish.");
+    }
+    const worktree = workspaceMaterialization.worktrees.find(
+      (item) => item.repositoryId === repositoryId,
+    );
+    if (!worktree) {
+      throw new Error("The selected worktree is not part of this workspace.");
+    }
+    const workspaceId = selectedWorkspace.id;
+    setWorkspaceCommandState("reindexing");
+    setWorkspaceActionError("");
+    setNotice(
+      `${selectedWorkspace.key} · indexing ${worktree.label} on ${worktree.branchName}…`,
+    );
+    try {
+      const result = await client.indexWorktreeGraph(workspaceId, repositoryId);
+      const expectedPath = `${worktree.targetDisplayPath.replace(/\/$/, "")}/graphify-out/graph.json`;
+      if (
+        result.workspaceId !== workspaceId ||
+        result.graphDisplayPath !== expectedPath
+      ) {
+        throw new Error("WTS returned graph output for another worktree.");
+      }
+      setNotice(
+        `${selectedWorkspace.key} · ${worktree.label} ${worktree.branchName} graph ready`,
+      );
+      return result;
+    } finally {
+      setWorkspaceCommandState("idle");
+    }
+  };
+
   const syncSelectedWorkspaceRepository = async (
     repositoryId: string,
   ): Promise<WorkspaceRepositorySyncResult> => {
@@ -13085,6 +13204,15 @@ export function LocalWorkspace({
                 onReviseBase={startBaseRevision}
                 onCreateRevisedCopy={startRevisedWorkspace}
                 onReconcile={() => void reindexSelectedWorkspaceGraph()}
+                graphifyAvailable={Boolean(
+                  setupSnapshot?.integrations.some(
+                    (integration) =>
+                      integration.id === "graphify" &&
+                      integration.installation === "detected" &&
+                      !integration.blockingFor.includes("graphIndexing"),
+                  ),
+                )}
+                onIndexWorktreeGraph={indexSelectedWorktreeGraph}
                 onSyncRepository={syncSelectedWorkspaceRepository}
                 onAlignRepository={alignSelectedWorkspaceRepository}
                 onMaterialize={materializeSelectedWorkspace}
